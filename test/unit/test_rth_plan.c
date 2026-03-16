@@ -26,6 +26,15 @@
 
 sb_rth_plan_t* plan;
 
+/* clang-format off */
+const uint8_t default_flags = (
+    SB_RTH_PLAN_ENTRY_HAS_NECK |
+    SB_RTH_PLAN_ENTRY_HAS_LANDING_ALTITUDE |
+    SB_RTH_PLAN_ENTRY_HAS_POST_DELAY |
+    SB_RTH_PLAN_ENTRY_HAS_PRE_DELAY
+);
+/* clang-format on */
+
 sb_error_t loadFixture(const char* fname);
 void closeFixture(void);
 
@@ -81,10 +90,10 @@ void test_rth_plan_is_really_empty(void)
 
     for (i = 0; i < n; i++) {
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t[i], &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.duration_sec);
+        TEST_ASSERT_EQUAL(0, entry.flags & (SB_RTH_PLAN_ENTRY_HAS_TARGET_XY | SB_RTH_PLAN_ENTRY_HAS_TARGET_Z));
     }
 }
 
@@ -100,29 +109,25 @@ void test_new(void)
 
 void test_get_points(void)
 {
-    sb_vector3_t vec;
+    sb_vector2_t vec;
 
     TEST_ASSERT_EQUAL(2, sb_rth_plan_get_num_points(plan));
 
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_get_point(plan, 0, &vec));
     TEST_ASSERT_EQUAL_FLOAT(30000, vec.x);
     TEST_ASSERT_EQUAL_FLOAT(40000, vec.y);
-    TEST_ASSERT_EQUAL_FLOAT(0, vec.z);
 
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_get_point(plan, 1, &vec));
     TEST_ASSERT_EQUAL_FLOAT(-40000, vec.x);
     TEST_ASSERT_EQUAL_FLOAT(-30000, vec.y);
-    TEST_ASSERT_EQUAL_FLOAT(5000, vec.z);
 
     TEST_ASSERT_EQUAL(SB_EINVAL, sb_rth_plan_get_point(plan, 2, &vec));
     TEST_ASSERT_EQUAL_FLOAT(-40000, vec.x);
     TEST_ASSERT_EQUAL_FLOAT(-30000, vec.y);
-    TEST_ASSERT_EQUAL_FLOAT(5000, vec.z);
 
     TEST_ASSERT_EQUAL(SB_EINVAL, sb_rth_plan_get_point(plan, 5234, &vec));
     TEST_ASSERT_EQUAL_FLOAT(-40000, vec.x);
     TEST_ASSERT_EQUAL_FLOAT(-30000, vec.y);
-    TEST_ASSERT_EQUAL_FLOAT(5000, vec.z);
 }
 
 void test_get_num_entries(void)
@@ -151,7 +156,7 @@ void test_default_acceleration_limit(void)
 
 void test_default_landing_velocity(void)
 {
-    TEST_ASSERT(!sb_rth_plan_has_default_landing_velocity(plan));
+    TEST_ASSERT(sb_rth_plan_has_default_landing_velocity(plan));
 
     sb_rth_plan_set_default_landing_velocity(plan, 750.0f);
     TEST_ASSERT(sb_rth_plan_has_default_landing_velocity(plan));
@@ -176,6 +181,26 @@ void test_default_landing_velocity(void)
     TEST_ASSERT(!sb_rth_plan_has_default_landing_velocity(plan));
 }
 
+void test_default_landing_altitude(void)
+{
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sb_rth_plan_get_default_landing_altitude(plan));
+
+    sb_rth_plan_set_default_landing_altitude(plan, 5000.0f);
+    TEST_ASSERT_EQUAL_FLOAT(5000.0f, sb_rth_plan_get_default_landing_altitude(plan));
+
+    /* invalid values */
+    sb_rth_plan_set_default_landing_altitude(plan, -INFINITY);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sb_rth_plan_get_default_landing_altitude(plan));
+
+    /* more invalid values */
+    sb_rth_plan_set_default_landing_altitude(plan, INFINITY);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sb_rth_plan_get_default_landing_altitude(plan));
+
+    /* even more invalid values */
+    sb_rth_plan_set_default_landing_altitude(plan, NAN);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sb_rth_plan_get_default_landing_altitude(plan));
+}
+
 void test_evaluate_at(void)
 {
     sb_rth_plan_entry_t entry;
@@ -183,17 +208,14 @@ void test_evaluate_at(void)
 
     /* RTH plan from file has the following entries:
      *
-     * T = 0: land
-     * T = 15: go to keep alt (30m, 40m) in 50s with post-delay=5s
-     * T = 45: go to keep alt (-40m, -30m) in 50s with pre-delay=2s
-     * T = 65: go to keep alt (30m, 40m) in 30s
-     * T = 80: same as previous entry, but in 20s
-     * T = 90: go straight to (30m, 40m, 20m) with +5m pre-neck in 5s, in 30s
-     * T = 115: land
-     *
-     * When evaluating the RTH plan at a given time instant t, the entry that is
-     * in effect is the entry at t, or if there is no entry at t, then the
-     * _next_ entry in the list
+     * T <= 0: land
+     * T in (0; 15]: at T=15, go to keeping alt (30m, 40m) in 50s with post-delay=5s
+     * T in (15; 45]: at T=45, go to keeping alt (-40m, -30m) in 50s with pre-delay=2s
+     * T in (45; 65]: at T=65, go to keeping alt (30m, 40m) in 30s
+     * T in (65; 80]: at T=80, go to keeping alt (30m, 40m) in 20s
+     * T in (80; 90]: at T=90: go straight to (30m, 40m, 20m) with +5m pre-neck in 5s, in 30s
+     * T in (90; 115]: at T=115: land in place
+     * T > 115: end of RTH plan, no more entries, so land immediately
      */
 
     /* Land automatically for negative time, up to and including T=0 */
@@ -201,12 +223,14 @@ void test_evaluate_at(void)
         t = i / 10.0f;
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
         TEST_ASSERT_EQUAL(t, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags, entry.flags);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.duration_sec);
-        TEST_ASSERT_EQUAL(0, entry.arrival_altitude);
+        TEST_ASSERT_EQUAL(0, entry.landing_altitude);
         TEST_ASSERT_EQUAL(0, entry.pre_neck_duration_sec);
         TEST_ASSERT_EQUAL(0, entry.pre_neck);
     }
@@ -215,10 +239,10 @@ void test_evaluate_at(void)
      * to T=15 (inclusive). Execution starts at T=15 */
     for (int i = 2; i <= 150; i += 2) {
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, i / 10.0f, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE, entry.action);
-        TEST_ASSERT_EQUAL(30000, entry.target.x); /* target is in [mm] */
-        TEST_ASSERT_EQUAL(40000, entry.target.y);
         TEST_ASSERT_EQUAL(15, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags | SB_RTH_PLAN_ENTRY_HAS_TARGET_XY, entry.flags);
+        TEST_ASSERT_EQUAL(30000, entry.landing_target.x); /* target is in [mm] */
+        TEST_ASSERT_EQUAL(40000, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(5, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(50, entry.duration_sec);
@@ -231,10 +255,10 @@ void test_evaluate_at(void)
      * (exclusive) to T=45 (inclusive). Execution starts at T=45 */
     for (int i = 155; i <= 450; i += 5) {
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, i / 10.0f, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE, entry.action);
-        TEST_ASSERT_EQUAL(-40000, entry.target.x); /* target is in [mm] */
-        TEST_ASSERT_EQUAL(-30000, entry.target.y);
         TEST_ASSERT_EQUAL(45, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags | SB_RTH_PLAN_ENTRY_HAS_TARGET_XY, entry.flags);
+        TEST_ASSERT_EQUAL(-40000, entry.landing_target.x); /* target is in [mm] */
+        TEST_ASSERT_EQUAL(-30000, entry.landing_target.y);
         TEST_ASSERT_EQUAL(2, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(50, entry.duration_sec);
@@ -249,10 +273,10 @@ void test_evaluate_at(void)
         t = i / 10.0f;
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE, entry.action);
-        TEST_ASSERT_EQUAL(30000, entry.target.x); /* target is in [mm] */
-        TEST_ASSERT_EQUAL(40000, entry.target.y);
         TEST_ASSERT_EQUAL(t <= 65 ? 65 : 80, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags | SB_RTH_PLAN_ENTRY_HAS_TARGET_XY, entry.flags);
+        TEST_ASSERT_EQUAL(30000, entry.landing_target.x); /* target is in [mm] */
+        TEST_ASSERT_EQUAL(40000, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(t <= 65 ? 30 : 20, entry.duration_sec);
@@ -267,11 +291,13 @@ void test_evaluate_at(void)
         t = i / 10.0f;
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_GO_TO_WITH_ALTITUDE, entry.action);
-        TEST_ASSERT_EQUAL(30000, entry.target.x); /* target is in [mm] */
-        TEST_ASSERT_EQUAL(40000, entry.target.y);
-        TEST_ASSERT_EQUAL(20000, entry.arrival_altitude);
         TEST_ASSERT_EQUAL(90, entry.time_sec);
+        TEST_ASSERT_EQUAL(
+            default_flags | SB_RTH_PLAN_ENTRY_HAS_TARGET_XY | SB_RTH_PLAN_ENTRY_HAS_TARGET_Z,
+            entry.flags);
+        TEST_ASSERT_EQUAL(30000, entry.landing_target.x); /* target is in [mm] */
+        TEST_ASSERT_EQUAL(40000, entry.landing_target.y);
+        TEST_ASSERT_EQUAL(20000, entry.arrival_altitude);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(5, entry.pre_neck_duration_sec);
@@ -284,10 +310,10 @@ void test_evaluate_at(void)
         t = i / 10.0f;
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
-        TEST_ASSERT_EQUAL(0, entry.target.x);
-        TEST_ASSERT_EQUAL(0, entry.target.y);
         TEST_ASSERT_EQUAL(115, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags, entry.flags);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.duration_sec);
@@ -302,10 +328,10 @@ void test_evaluate_at(void)
         t = i / 10.0f;
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
-        TEST_ASSERT_EQUAL(0, entry.target.x);
-        TEST_ASSERT_EQUAL(0, entry.target.y);
         TEST_ASSERT_EQUAL(t, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags, entry.flags);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.duration_sec);
@@ -316,10 +342,10 @@ void test_evaluate_at(void)
 
     /* Test positive infinity */
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, INFINITY, &entry));
-    TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
-    TEST_ASSERT_EQUAL(0, entry.target.x);
-    TEST_ASSERT_EQUAL(0, entry.target.y);
     TEST_ASSERT_EQUAL_FLOAT(INFINITY, entry.time_sec);
+    TEST_ASSERT_EQUAL(default_flags, entry.flags);
+    TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+    TEST_ASSERT_EQUAL(0, entry.landing_target.y);
     TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
     TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
     TEST_ASSERT_EQUAL(0, entry.duration_sec);
@@ -329,10 +355,10 @@ void test_evaluate_at(void)
 
     /* Test negative infinity */
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, -INFINITY, &entry));
-    TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
-    TEST_ASSERT_EQUAL(0, entry.target.x);
-    TEST_ASSERT_EQUAL(0, entry.target.y);
     TEST_ASSERT_EQUAL_FLOAT(-INFINITY, entry.time_sec);
+    TEST_ASSERT_EQUAL(default_flags, entry.flags);
+    TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+    TEST_ASSERT_EQUAL(0, entry.landing_target.y);
     TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
     TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
     TEST_ASSERT_EQUAL(0, entry.duration_sec);
@@ -344,6 +370,7 @@ void test_evaluate_at(void)
 void test_plan_duration_too_large(void)
 {
     sb_rth_plan_entry_t entry;
+    float t;
 
     uint8_t buf[] = {
         /* header */
@@ -356,24 +383,28 @@ void test_plan_duration_too_large(void)
         0x0A,
         /* Acceleration, 2000 units/s^2 */
         0xD0, 0x07,
+        /* Landing velocity, 1000 units/s */
+        0xE8, 0x03,
+        /* Landing altitude, scaled */
+        0x00, 0x00,
         /* Two RTH points */
         0x02, 0x00,
-        0xB8, 0x0B, 0xA0, 0x0F, 0x40, 0x00,
-        0x60, 0xF0, 0x48, 0xF4, 0x00, 0x00,
+        0xB8, 0x0B, 0xA0, 0x0F,
+        0x60, 0xF0, 0x48, 0xF4,
         /* Six entries */
         0x06, 0x00,
-        /* Entry 1: T = 0, land */
-        0x10, 0x00,
-        /* Entry 2: T = 3s */
-        0x21, 0x03, 0x00, 0x32, 0x05,
+        /* Entry 1: T = 0, post-delay 0 sec */
+        0x20, 0x00, 0x00,
+        /* Entry 2: T = 3s, has post-delay, has target XY, point index 0, duration 5s, post-delay 5s */
+        0x22, 0x03, 0x00, 0x32, 0x05,
         /* Entry 3, with invalid duration (too long) */
         0x22, 0xff, 0xff, 0xff, 0xff, 0x0f, 0x01, 0x32, 0x02,
         /* Entry 4 */
-        0x20, 0x14, 0x00, 0x1e,
+        0x02, 0x14, 0x00, 0x1e,
         /* Entry 5 */
-        0x00, 0x0f, 0x1e,
+        0x00, 0x0f,
         /* Entry 6 */
-        0x10, 0x19
+        0x20, 0x19, 0x00
     };
 
     closeFixture(); /* was created in setUp() */
@@ -381,24 +412,37 @@ void test_plan_duration_too_large(void)
 
     /* Command is "land" until T=0 */
     for (int i = -20; i <= 0; i++) {
-        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, i / 10.0f, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_LAND, entry.action);
+        t = i / 10.0f;
+
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
+        TEST_ASSERT_EQUAL(t, entry.time_sec);
+        TEST_ASSERT_EQUAL(default_flags, entry.flags);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.x);
+        TEST_ASSERT_EQUAL(0, entry.landing_target.y);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(0, entry.duration_sec);
+        TEST_ASSERT_EQUAL(0, entry.landing_altitude);
+        TEST_ASSERT_EQUAL(0, entry.pre_neck_duration_sec);
+        TEST_ASSERT_EQUAL(0, entry.pre_neck);
     }
 
     /* Command is "go to (30m, 40m) in 50s with post-delay=5s" from T=0 (exclusive)
      * to T=3 (inclusive) */
     for (int i = 2; i <= 30; i += 2) {
-        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, i / 10.0f, &entry));
-        TEST_ASSERT_EQUAL(SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE, entry.action);
-        TEST_ASSERT_EQUAL(30000, entry.target.x); /* target is in [mm] */
-        TEST_ASSERT_EQUAL(40000, entry.target.y);
-        TEST_ASSERT_EQUAL(640, entry.target.z);
+        t = i / 10.0f;
+
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
+        TEST_ASSERT_EQUAL(default_flags | SB_RTH_PLAN_ENTRY_HAS_TARGET_XY, entry.flags);
+        TEST_ASSERT_EQUAL(30000, entry.landing_target.x); /* target is in [mm] */
+        TEST_ASSERT_EQUAL(40000, entry.landing_target.y);
+        TEST_ASSERT_EQUAL(0, entry.arrival_altitude);
         TEST_ASSERT_EQUAL(0, entry.pre_delay_sec);
         TEST_ASSERT_EQUAL(5, entry.post_delay_sec);
         TEST_ASSERT_EQUAL(50, entry.duration_sec);
+        TEST_ASSERT_EQUAL(0, entry.landing_altitude);
+        TEST_ASSERT_EQUAL(0, entry.pre_neck_duration_sec);
+        TEST_ASSERT_EQUAL(0, entry.pre_neck);
     }
 
     /* Next command is invalid */
@@ -407,7 +451,8 @@ void test_plan_duration_too_large(void)
     }
 }
 
-void assert_trajectory_is_constant(sb_trajectory_t* trajectory, float start, float end, sb_vector3_t pos)
+void assert_trajectory_is_constant_between(
+    sb_trajectory_t* trajectory, float start, float end, sb_vector3_t pos)
 {
     float t;
     const float step = 0.5f;
@@ -433,6 +478,85 @@ void assert_trajectory_is_constant(sb_trajectory_t* trajectory, float start, flo
     sb_trajectory_player_destroy(&player);
 }
 
+void assert_trajectory_is_descending_between(
+    sb_trajectory_t* trajectory, float start, float end, sb_vector3_t pos)
+{
+    float t;
+    const float step = 0.5f;
+    sb_trajectory_player_t player;
+    sb_vector3_with_yaw_t observed_vec;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
+
+    for (t = start; t < end; t += step) {
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_position_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_EQUAL(pos.x, observed_vec.x);
+        TEST_ASSERT_EQUAL(pos.y, observed_vec.y);
+        TEST_ASSERT_LESS_OR_EQUAL(pos.z, observed_vec.z);
+
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_velocity_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_LESS_OR_EQUAL(0.0f, observed_vec.z);
+    }
+
+    sb_trajectory_player_destroy(&player);
+}
+
+void assert_trajectory_is_ascending_vertically_between(
+    sb_trajectory_t* trajectory, float start, float end, sb_vector3_t pos)
+{
+    float t;
+    const float step = 0.5f;
+    sb_trajectory_player_t player;
+    sb_vector3_with_yaw_t observed_vec;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
+
+    for (t = start; t < end; t += step) {
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_position_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_EQUAL(pos.x, observed_vec.x);
+        TEST_ASSERT_EQUAL(pos.y, observed_vec.y);
+        TEST_ASSERT_GREATER_OR_EQUAL(pos.z, observed_vec.z);
+
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_velocity_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_EQUAL(0.0f, observed_vec.x);
+        TEST_ASSERT_EQUAL(0.0f, observed_vec.y);
+        TEST_ASSERT_GREATER_OR_EQUAL(0.0f, observed_vec.z);
+    }
+
+    sb_trajectory_player_destroy(&player);
+}
+
+void assert_trajectory_is_descending_vertically_between(
+    sb_trajectory_t* trajectory, float start, float end, sb_vector3_t pos)
+{
+    float t;
+    const float step = 0.5f;
+    sb_trajectory_player_t player;
+    sb_vector3_with_yaw_t observed_vec;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
+
+    for (t = start; t < end; t += step) {
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_position_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_EQUAL(pos.x, observed_vec.x);
+        TEST_ASSERT_EQUAL(pos.y, observed_vec.y);
+        TEST_ASSERT_LESS_OR_EQUAL(pos.z, observed_vec.z);
+
+        TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_get_velocity_at(&player, t, &observed_vec));
+
+        TEST_ASSERT_EQUAL(0.0f, observed_vec.x);
+        TEST_ASSERT_EQUAL(0.0f, observed_vec.y);
+        TEST_ASSERT_LESS_OR_EQUAL(0.0f, observed_vec.z);
+    }
+
+    sb_trajectory_player_destroy(&player);
+}
+
 void test_convert_to_trajectory(void)
 {
     sb_rth_plan_entry_t entry;
@@ -443,23 +567,22 @@ void test_convert_to_trajectory(void)
         /* .y = */ 25000,
         /* .z = */ 20000
     };
+    sb_vector3_t pos;
     sb_vector3_with_yaw_t vec;
-    float t;
+    float t, t_end;
 
     TEST_ASSERT_NOT_NULL(trajectory = sb_trajectory_new());
 
     /* RTH plan from file has the following entries:
      *
-     * T = 0: land
-     * T = 15: go above (30m, 40m, 0m) in 50s with post-delay=5s, then land with 1 m/s
-     * T = 45: go above (-40m, -30m, 5m) in 50s with pre-delay=2s, then land with 1 m/s
-     * T = 65: go above (30m, 40m, 0m) in 30s, then land with 1 m/s
-     * T = 80: same as previous entry
-     * T = 105: land
-     *
-     * When evaluating the RTH plan at a given time instant t, the entry that is
-     * in effect is the entry at t, or if there is no entry at t, then the
-     * _next_ entry in the list
+     * T <= 0: land
+     * T in (0; 15]: at T=15, go to keeping alt (30m, 40m) in 50s with post-delay=5s
+     * T in (15; 45]: at T=45, go to keeping alt (-40m, -30m) in 50s with pre-delay=2s
+     * T in (45; 65]: at T=65, go to keeping alt (30m, 40m) in 30s
+     * T in (65; 80]: at T=80, go to keeping alt (30m, 40m) in 20s
+     * T in (80; 90]: at T=90: go straight to (30m, 40m, 20m) with +5m pre-neck in 5s, in 30s
+     * T in (90; 115]: at T=115: land in place
+     * T > 115: end of RTH plan, no more entries, so land immediately
      *
      * The original RTH plan uses an acceleration limit of 2000 units/s^2, but we will
      * use no acceleration limit to get rid of the effect of small rounding errors.
@@ -468,7 +591,6 @@ void test_convert_to_trajectory(void)
      * automatic addition of a smooth descent at the end of the generated trajectory.
      */
     sb_rth_plan_set_default_acceleration_limit(plan, INFINITY);
-    sb_rth_plan_set_default_landing_velocity(plan, 1000);
 
     /* Land automatically for negative time, up to and including T=0 */
     for (int i = -20; i <= 0; i++) {
@@ -477,8 +599,8 @@ void test_convert_to_trajectory(void)
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
-        TEST_ASSERT_EQUAL(0, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, 10.0f, start);
+        TEST_ASSERT_EQUAL(20000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_descending_vertically_between(trajectory, 0.0f, 20.0f, start);
     }
 
     /* Command is "go above (30m, 40m, 0m) in 50s, wait 5 seconds, then land with
@@ -491,8 +613,13 @@ void test_convert_to_trajectory(void)
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
         t = 15;
-        TEST_ASSERT_EQUAL(t * 1000 + 75000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t, start);
+        t_end = t + 75;
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t, start);
+        pos.x = 30000;
+        pos.y = 40000;
+        pos.z = start.z;
+        assert_trajectory_is_descending_between(trajectory, t + 50, t_end, pos);
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
 
@@ -533,8 +660,13 @@ void test_convert_to_trajectory(void)
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
         t = 45;
-        TEST_ASSERT_EQUAL(t * 1000 + 67000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t + 2.0, start);
+        t_end = t + 67;
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t + 2, start);
+        pos.x = -40000;
+        pos.y = -30000;
+        pos.z = start.z;
+        assert_trajectory_is_descending_between(trajectory, t + 52, t_end, pos);
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
 
@@ -570,8 +702,14 @@ void test_convert_to_trajectory(void)
         entry.time_sec = t;
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
-        TEST_ASSERT_EQUAL(t * 1000 + (i <= 650 ? 30000 : 20000) + 20000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t, start);
+        t_end = t + (i <= 650 ? 50 : 40);
+
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t, start);
+        pos.x = 30000;
+        pos.y = 40000;
+        pos.z = start.z;
+        assert_trajectory_is_descending_between(trajectory, t_end - 20, t_end, pos);
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
 
@@ -596,9 +734,9 @@ void test_convert_to_trajectory(void)
         sb_trajectory_player_destroy(&player);
     }
 
-    /* Command is "go straight (30m, 40m, 20m) in 30s+5s, then land with 1 m/s" from
-     * T=80 (exclusive) to T=90 (inclusive). RTH plan is designed to start at T=90, but
-     * we deliberately push it back. */
+    /* Command is "go straight (30m, 40m, 20m) in 30s+5s with a pre-neck of 5m,
+     * then land with 1 m/s" from T=80 (exclusive) to T=90 (inclusive). RTH plan is
+     * designed to start at T=90, but we deliberately push it back. */
     for (int i = 805; i <= 900; i += 5) {
         t = i / 10.0f;
 
@@ -607,8 +745,15 @@ void test_convert_to_trajectory(void)
         entry.time_sec = t;
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
-        TEST_ASSERT_EQUAL(t * 1000 + 55000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t, start);
+        t_end = t + 55;
+
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t, start);
+        assert_trajectory_is_ascending_vertically_between(trajectory, t, t + 5, start);
+        pos.x = 30000;
+        pos.y = 40000;
+        pos.z = start.z;
+        assert_trajectory_is_descending_between(trajectory, t + 35, t_end, pos);
 
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_player_init(&player, trajectory));
 
@@ -647,8 +792,10 @@ void test_convert_to_trajectory(void)
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
         t = 115;
-        TEST_ASSERT_EQUAL(t * 1000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t, start);
+        t_end = t + 20;
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t, start);
+        assert_trajectory_is_descending_vertically_between(trajectory, t, t_end, start);
     }
 
     /* We are now beyond the last point */
@@ -658,8 +805,10 @@ void test_convert_to_trajectory(void)
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_rth_plan_evaluate_at(plan, t, &entry));
         TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_update_from_rth_plan_entry(trajectory, &entry, start));
 
-        TEST_ASSERT_EQUAL(t * 1000, sb_trajectory_get_total_duration_msec(trajectory));
-        assert_trajectory_is_constant(trajectory, 0.0f, t, start);
+        t_end = t + 20;
+        TEST_ASSERT_EQUAL(t_end * 1000, sb_trajectory_get_total_duration_msec(trajectory));
+        assert_trajectory_is_constant_between(trajectory, 0.0f, t, start);
+        assert_trajectory_is_descending_vertically_between(trajectory, t, t_end, start);
     }
 
     SB_XDECREF(trajectory);
@@ -676,6 +825,7 @@ int main(int argc, char* argv[])
     RUN_TEST(test_is_empty);
     RUN_TEST(test_default_acceleration_limit);
     RUN_TEST(test_default_landing_velocity);
+    RUN_TEST(test_default_landing_altitude);
     RUN_TEST(test_evaluate_at);
     RUN_TEST(test_plan_duration_too_large);
     RUN_TEST(test_convert_to_trajectory);

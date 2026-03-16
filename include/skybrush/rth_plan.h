@@ -33,29 +33,17 @@ __BEGIN_DECLS
  */
 
 /**
- * @brief Enum containing the types of the possible actions that we support
- * during a collective return-to-home maneuver.
+ * Enum representing which of the RTH plan entry parameter should be considered
+ * when evaluating the RTH plan at a given time instant.
  */
 typedef enum {
-    /** Same as previous entry */
-    SB_RTH_ACTION_SAME_AS_PREVIOUS = 0,
-
-    /** Land in place */
-    SB_RTH_ACTION_LAND = 1,
-
-    /**
-     * Go above the target coordinate of the action, keeping altitude, and start a
-     * descent from there to the target.
-     */
-    SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE = 2,
-
-    /**
-     * Go above the target of the action in a straight line to a specified altitude
-     * and start a descent from there to the target, optionally preceded by a vertical
-     * neck.
-     */
-    SB_RTH_ACTION_GO_TO_WITH_ALTITUDE = 3
-} sb_rth_action_t;
+    SB_RTH_PLAN_ENTRY_HAS_NECK = (1 << 0),
+    SB_RTH_PLAN_ENTRY_HAS_TARGET_XY = (1 << 1),
+    SB_RTH_PLAN_ENTRY_HAS_TARGET_Z = (1 << 2),
+    SB_RTH_PLAN_ENTRY_HAS_LANDING_ALTITUDE = (1 << 3),
+    SB_RTH_PLAN_ENTRY_HAS_PRE_DELAY = (1 << 4),
+    SB_RTH_PLAN_ENTRY_HAS_POST_DELAY = (1 << 5),
+} sb_rth_plan_entry_flag_t;
 
 /**
  * @brief Structure describing the return-to-home action corresponding to a
@@ -65,26 +53,44 @@ typedef struct sb_rth_plan_entry_s {
     /** The timestamp when the action should start */
     float time_sec;
 
-    /** The action type to perform */
-    sb_rth_action_t action;
-
-    /** The net duration of the action, in seconds */
+    /**
+     * The duration of the main segment of the action, in seconds, _not_ including
+     * the pre-delay, post-delay, neck and landing phases.
+     */
     float duration_sec;
 
-    /** The target of the action */
-    sb_vector3_t target;
+    /**
+     * Flags indicating which parameters are valid for this entry.
+     *
+     * The following flags are always set because we provide default values for them
+     * even if the binary representation of the RTH plan did not specify them:
+     *
+     * - \c SB_RTH_PLAN_ENTRY_HAS_LANDING_ALTITUDE (default value comes from the plan)
+     * - \c SB_RTH_PLAN_ENTRY_HAS_PRE_DELAY (default value is 0)
+     * - \c SB_RTH_PLAN_ENTRY_HAS_POST_DELAY (default value is 0)
+     * - \c SB_RTH_PLAN_ENTRY_HAS_NECK (default value is a neck with zero duration and length)
+     */
+    sb_rth_plan_entry_flag_t flags;
 
-    /** The arrival altitude above the target, if neeeded */
+    /**
+     * The XY landing target of the action, if the \c SB_RTH_PLAN_ENTRY_HAS_TARGET_XY
+     * bit is set in the flags.
+     */
+    sb_vector2_t landing_target;
+
+    /**
+     * The arrival altitude above the target, if the \c SB_RTH_PLAN_ENTRY_HAS_TARGET_Z
+     * bit is set in the flags.
+     */
     float arrival_altitude;
 
-    /** Optional delay to add \em before the action, in seconds */
+    /** Delay to add \em before the action, in seconds */
     float pre_delay_sec;
 
     /** Optional delay to add \em after the action, in seconds */
     float post_delay_sec;
 
-    /** Optional vertical neck to add \em before the action, after the pre delay.
-     * Applicable only to SB_RTH_ACTION_GO_TO_WITH_ALTITUDE */
+    /** Optional vertical neck to add \em before the action */
     float pre_neck;
 
     /** The duration of the pre-neck phase, in seconds */
@@ -103,6 +109,11 @@ typedef struct sb_rth_plan_entry_s {
      * descent will be added.
      */
     float landing_velocity;
+
+    /**
+     * The landing altitude of the action.
+     */
+    float landing_altitude;
 } sb_rth_plan_entry_t;
 
 /**
@@ -115,23 +126,26 @@ typedef struct sb_rth_plan_s {
     size_t header_length; /**< Number of bytes in the header of the buffer */
     size_t num_points; /**< Number of points in the RTH plan */
     float max_acceleration; /**< Maximum acceleration during RTH actions */
-    float landing_velocity; /**< Optional landing velocity for RTH actions; NaN means not specified */
+    float landing_velocity; /**< Optional landing velocity for RTH actions */
+    float landing_altitude; /**< Default landing altitude for RTH actions */
 } sb_rth_plan_t;
 
 sb_rth_plan_t* sb_rth_plan_new(void);
 sb_error_t sb_rth_plan_init(sb_rth_plan_t* plan);
 
 float sb_rth_plan_get_default_acceleration_limit(const sb_rth_plan_t* plan);
+float sb_rth_plan_get_default_landing_altitude(const sb_rth_plan_t* plan);
 float sb_rth_plan_get_default_landing_velocity(const sb_rth_plan_t* plan);
 size_t sb_rth_plan_get_num_entries(const sb_rth_plan_t* plan);
 size_t sb_rth_plan_get_num_points(const sb_rth_plan_t* plan);
-sb_error_t sb_rth_plan_get_point(const sb_rth_plan_t* plan, size_t index, sb_vector3_t* point);
+sb_error_t sb_rth_plan_get_point(const sb_rth_plan_t* plan, size_t index, sb_vector2_t* point);
 sb_bool_t sb_rth_plan_has_default_landing_velocity(const sb_rth_plan_t* plan);
 sb_bool_t sb_rth_plan_is_empty(const sb_rth_plan_t* plan);
 
 sb_error_t sb_rth_plan_evaluate_at(const sb_rth_plan_t* plan, float time, sb_rth_plan_entry_t* result);
 
 void sb_rth_plan_clear_default_landing_velocity(sb_rth_plan_t* plan);
+void sb_rth_plan_set_default_landing_altitude(sb_rth_plan_t* plan, float landing_altitude);
 void sb_rth_plan_set_default_landing_velocity(sb_rth_plan_t* plan, float landing_velocity);
 void sb_rth_plan_set_default_acceleration_limit(sb_rth_plan_t* plan, float max_acceleration);
 

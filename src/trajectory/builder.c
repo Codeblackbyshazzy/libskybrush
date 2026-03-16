@@ -295,6 +295,8 @@ sb_error_t sb_trajectory_builder_append_line(
  * When the duration is larger than the maximum allowed length of a single
  * segment, the new segment will be split appropriately.
  *
+ * This function is a no-op if the duration is zero.
+ *
  * @param builder the trajectory builder
  * @param duration_msec the duration of the segment, in milliseconds
  */

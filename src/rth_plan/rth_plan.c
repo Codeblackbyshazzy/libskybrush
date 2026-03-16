@@ -44,14 +44,9 @@
  */
 #define MAX_DURATION 16777216
 
-#define OFFSET_OF_POINT(index) (plan->header_length + (index) * 3 * sizeof(int16_t))
+#define OFFSET_OF_POINT(index) (plan->header_length + (index) * 2 * sizeof(int16_t))
 #define OFFSET_OF_ENTRY_TABLE (OFFSET_OF_POINT(plan->num_points))
 #define OFFSET_OF_FIRST_ENTRY (OFFSET_OF_ENTRY_TABLE + sizeof(uint16_t))
-
-static sb_bool_t sb_i_rth_action_has_arrival_altitude(sb_rth_action_t action);
-static sb_bool_t sb_i_rth_action_has_duration(sb_rth_action_t action);
-static sb_bool_t sb_i_rth_action_has_neck(sb_rth_action_t action);
-static sb_bool_t sb_i_rth_action_has_target(sb_rth_action_t action);
 
 static void sb_i_rth_plan_destroy(sb_rth_plan_t* plan);
 static float sb_i_rth_plan_parse_coordinate(const sb_rth_plan_t* plan, size_t* offset);
@@ -60,7 +55,8 @@ static size_t sb_i_rth_plan_parse_header(sb_rth_plan_t* plan);
 static sb_error_t sb_i_rth_plan_update_from_bytes(sb_rth_plan_t* plan, uint8_t* buf, size_t nbytes, sb_bool_t owned);
 static sb_error_t sb_i_rth_plan_update_from_parser(sb_rth_plan_t* plan, sb_binary_file_parser_t* parser);
 
-static void sb_i_rth_plan_entry_clear(sb_rth_plan_entry_t* entry, const sb_rth_plan_t* plan);
+static void sb_i_rth_plan_entry_clear(
+    sb_rth_plan_entry_t* entry, const sb_rth_plan_t* plan, float time_sec);
 
 /**
  * \brief Allocates a new RTH plan object on the heap and initializes it.
@@ -102,6 +98,7 @@ sb_error_t sb_rth_plan_init(sb_rth_plan_t* plan)
     plan->num_points = 0;
     plan->max_acceleration = INFINITY;
     plan->landing_velocity = NAN;
+    plan->landing_altitude = 0;
 
     return SB_SUCCESS;
 }
@@ -116,6 +113,14 @@ float sb_rth_plan_get_default_acceleration_limit(const sb_rth_plan_t* plan)
     } else {
         return INFINITY;
     }
+}
+
+/**
+ * @brief Returns the default landing altitude for RTH actions.
+ */
+float sb_rth_plan_get_default_landing_altitude(const sb_rth_plan_t* plan)
+{
+    return plan->landing_altitude;
 }
 
 /**
@@ -163,7 +168,7 @@ size_t sb_rth_plan_get_num_points(const sb_rth_plan_t* plan)
  * @param index  the index of the point
  * @param point  the point will be returned here
  */
-sb_error_t sb_rth_plan_get_point(const sb_rth_plan_t* plan, size_t index, sb_vector3_t* point)
+sb_error_t sb_rth_plan_get_point(const sb_rth_plan_t* plan, size_t index, sb_vector2_t* point)
 {
     size_t num_points = sb_rth_plan_get_num_points(plan);
     size_t offset;
@@ -175,7 +180,6 @@ sb_error_t sb_rth_plan_get_point(const sb_rth_plan_t* plan, size_t index, sb_vec
     offset = OFFSET_OF_POINT(index);
     point->x = sb_i_rth_plan_parse_coordinate(plan, &offset);
     point->y = sb_i_rth_plan_parse_coordinate(plan, &offset);
-    point->z = sb_i_rth_plan_parse_coordinate(plan, &offset);
 
     return SB_SUCCESS;
 }
@@ -209,6 +213,20 @@ void sb_rth_plan_set_default_acceleration_limit(sb_rth_plan_t* plan, float max_a
         plan->max_acceleration = max_acceleration;
     } else {
         plan->max_acceleration = INFINITY;
+    }
+}
+
+/**
+ * @brief Sets the default landing altitude for RTH actions.
+ *
+ * Infinite values and NaN will be mapped to zero altitude.
+ */
+void sb_rth_plan_set_default_landing_altitude(sb_rth_plan_t* plan, float landing_altitude)
+{
+    if (isfinite(landing_altitude)) {
+        plan->landing_altitude = landing_altitude;
+    } else {
+        plan->landing_altitude = 0;
     }
 }
 
@@ -252,15 +270,14 @@ sb_error_t sb_rth_plan_evaluate_at(const sb_rth_plan_t* plan, float time, sb_rth
     uint8_t* buf = SB_BUFFER(plan->buffer);
     size_t buf_length = sb_buffer_size(&plan->buffer);
 
-    sb_i_rth_plan_entry_clear(&entry, plan);
-    entry.time_sec = time;
+    sb_i_rth_plan_entry_clear(&entry, plan, time);
 
     if (time < 0) {
         found = 1;
     }
 
     for (i = 0; i < num_entries && !found; i++) {
-        uint8_t flags, encoded_action;
+        uint8_t flags;
         uint32_t time_diff_s;
 
         flags = buf[offset++];
@@ -277,78 +294,46 @@ sb_error_t sb_rth_plan_evaluate_at(const sb_rth_plan_t* plan, float time, sb_rth
         time_s += time_diff_s;
         entry.time_sec = time_s;
 
-        /* Now, decode the rest of the entry */
+        /* If all the flags are zero, this means that the entry is the same as the
+         * previous one */
+        if (flags != 0) {
+            /* Entry is different; we need to reset the entry to the defaults and then
+             * update it */
+            sb_i_rth_plan_entry_clear(&entry, plan, time_s);
 
-        /* Parse flags */
-        encoded_action = (flags >> 4) & 0x03;
-        switch (encoded_action) {
-        case 0:
-            /* this means "same as before" so don't touch entry.action */
-            break;
-
-        case 1:
-            entry.action = SB_RTH_ACTION_LAND;
-            break;
-
-        case 2:
-            entry.action = SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE;
-            break;
-
-        case 3:
-            entry.action = SB_RTH_ACTION_GO_TO_WITH_ALTITUDE;
-            break;
-
-        default:
-            return SB_EPARSE;
-        }
-
-        /* Parse action parameters */
-        if (encoded_action != SB_RTH_ACTION_SAME_AS_PREVIOUS) {
-            /* If the action has a target, parse it */
-            if (sb_i_rth_action_has_target(entry.action)) {
-                SB_CHECK(sb_parse_varuint32(buf, buf_length, &offset, &point_index));
-            } else {
-                point_index = 0;
-            }
-
-            /* If the action has an arrival altitude, parse it */
-            if (sb_i_rth_action_has_arrival_altitude(entry.action)) {
-                entry.arrival_altitude = sb_i_rth_plan_parse_coordinate(plan, &offset);
-            } else {
-                entry.arrival_altitude = 0;
-            }
-
-            /* If the action has a pre-neck, parse its size and duration */
-            if (sb_i_rth_action_has_neck(entry.action)) {
+            /* Parse action parameters */
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_NECK) {
                 entry.pre_neck = sb_i_rth_plan_parse_coordinate(plan, &offset);
                 SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.pre_neck_duration_sec));
-            } else {
-                entry.pre_neck = 0;
-                entry.pre_neck_duration_sec = 0;
             }
-        }
 
-        /* If the action has a duration, parse it. Note that even if the action
-         * is the same as before (i.e. encoded_action == SB_RTH_ACTION_SAME_AS_PREVIOUS)
-         * we still repeat the duration */
-        if (sb_i_rth_action_has_duration(entry.action)) {
-            SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.duration_sec));
-        } else {
-            entry.duration_sec = 0;
-        }
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_XY) {
+                SB_CHECK(sb_parse_varuint32(buf, buf_length, &offset, &point_index));
+                SB_CHECK(sb_rth_plan_get_point(plan, point_index, &entry.landing_target));
+            }
 
-        /* If the action has a pre-delay, parse it */
-        if (flags & 0x02) {
-            SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.pre_delay_sec));
-        } else {
-            entry.pre_delay_sec = 0;
-        }
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_Z) {
+                entry.arrival_altitude = sb_i_rth_plan_parse_coordinate(plan, &offset);
+            }
 
-        /* If the action has a post-delay, parse it */
-        if (flags & 0x01) {
-            SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.post_delay_sec));
-        } else {
-            entry.post_delay_sec = 0;
+            if (flags & (SB_RTH_PLAN_ENTRY_HAS_TARGET_XY | SB_RTH_PLAN_ENTRY_HAS_TARGET_Z)) {
+                SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.duration_sec));
+            }
+
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_LANDING_ALTITUDE) {
+                entry.landing_altitude = sb_i_rth_plan_parse_coordinate(plan, &offset);
+            }
+
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_PRE_DELAY) {
+                SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.pre_delay_sec));
+            }
+
+            if (flags & SB_RTH_PLAN_ENTRY_HAS_POST_DELAY) {
+                SB_CHECK(sb_i_rth_plan_parse_duration(plan, &offset, &entry.post_delay_sec));
+            }
+
+            /* Merge flags byte into the entry */
+            entry.flags |= flags;
         }
 
         /* Check if the time of this entry is at least as large as the the
@@ -362,15 +347,8 @@ sb_error_t sb_rth_plan_evaluate_at(const sb_rth_plan_t* plan, float time, sb_rth
 
     if (!found) {
         /* Requested time was beyond the last point for which we had an RTH plan.
-         * In this case, we just land immediately. */
-        sb_i_rth_plan_entry_clear(&entry, plan);
-        entry.time_sec = time;
-    }
-
-    if (sb_i_rth_action_has_target(entry.action)) {
-        SB_CHECK(sb_rth_plan_get_point(plan, point_index, &entry.target));
-    } else {
-        memset(&entry.target, 0, sizeof(entry.target));
+         * In this case, we just land immediately to the default landing altitude */
+        sb_i_rth_plan_entry_clear(&entry, plan, time);
     }
 
     if (result) {
@@ -495,15 +473,16 @@ sb_error_t sb_trajectory_update_from_rth_plan_entry(
 
     /* Determine final scale for trajectory generation */
     SB_CHECK(sb_scale_update_vector3(&scale, start));
-    if (sb_i_rth_action_has_neck(entry->action)) {
+    if (entry->flags & SB_RTH_PLAN_ENTRY_HAS_NECK) {
         SB_CHECK(sb_scale_update_altitude(&scale, start.z + entry->pre_neck));
     }
-    if (sb_i_rth_action_has_target(entry->action)) {
-        SB_CHECK(sb_scale_update_vector3(&scale, entry->target));
+    if (entry->flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_XY) {
+        SB_CHECK(sb_scale_update_vector2(&scale, entry->landing_target));
     }
-    if (sb_i_rth_action_has_arrival_altitude(entry->action)) {
+    if (entry->flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_Z) {
         SB_CHECK(sb_scale_update_altitude(&scale, entry->arrival_altitude));
     }
+    SB_CHECK(sb_scale_update_altitude(&scale, entry->landing_altitude));
 
     if (start_time < 0) {
         start_time = 0;
@@ -514,14 +493,13 @@ sb_error_t sb_trajectory_update_from_rth_plan_entry(
     start_with_yaw.z = start.z;
     start_with_yaw.yaw = 0.0f;
 
+    SB_CHECK(sb_trajectory_builder_init(&builder, scale, /* flags = */ 0));
+    SB_CHECK(sb_trajectory_builder_set_start_position(&builder, start_with_yaw));
+
     /* Start trajectory with holding still during pre-delay */
     SB_CHECK(sb_uint32_msec_duration_from_float_seconds(
         &duration_msec,
         start_time + (entry->pre_delay_sec > 0 ? entry->pre_delay_sec : 0)));
-
-    SB_CHECK(sb_trajectory_builder_init(&builder, scale, /* flags = */ 0));
-    SB_CHECK(sb_trajectory_builder_set_start_position(&builder, start_with_yaw));
-
     SB_CHECK(sb_trajectory_builder_hold_position_for(&builder, duration_msec));
 
     /* Initialize target from start */
@@ -542,31 +520,15 @@ sb_error_t sb_trajectory_update_from_rth_plan_entry(
             &builder, target_with_yaw, duration_msec, max_acceleration));
     }
 
-    /* Add action */
-    switch (entry->action) {
-    case SB_RTH_ACTION_LAND:
-        /* this is easy, nothing to do */
-        break;
-
-    case SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE:
-        target_with_yaw.x = entry->target.x;
-        target_with_yaw.y = entry->target.y;
-        SB_CHECK(sb_uint32_msec_duration_from_float_seconds(
-            &duration_msec, entry->duration_sec));
-
-        if (duration_msec == 0) {
-            /* We need at least 1 msec for the transition */
-            duration_msec = 1;
-        }
-
-        SB_CHECK(sb_trajectory_builder_move_to_in_time(
-            &builder, target_with_yaw, duration_msec, max_acceleration));
-        break;
-
-    case SB_RTH_ACTION_GO_TO_WITH_ALTITUDE:
-        target_with_yaw.x = entry->target.x;
-        target_with_yaw.y = entry->target.y;
+    /* Add horizontal + vertical movement */
+    if (entry->flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_XY) {
+        target_with_yaw.x = entry->landing_target.x;
+        target_with_yaw.y = entry->landing_target.y;
+    }
+    if (entry->flags & SB_RTH_PLAN_ENTRY_HAS_TARGET_Z) {
         target_with_yaw.z = entry->arrival_altitude;
+    }
+    if (entry->flags & (SB_RTH_PLAN_ENTRY_HAS_TARGET_XY | SB_RTH_PLAN_ENTRY_HAS_TARGET_Z)) {
         SB_CHECK(sb_uint32_msec_duration_from_float_seconds(
             &duration_msec, entry->duration_sec));
 
@@ -577,30 +539,20 @@ sb_error_t sb_trajectory_update_from_rth_plan_entry(
 
         SB_CHECK(sb_trajectory_builder_move_to_in_time(
             &builder, target_with_yaw, duration_msec, max_acceleration));
-        break;
-
-    default:
-        /* unknown action */
-        retval = SB_EINVAL;
-        goto cleanup;
     }
 
     /* Add post delay */
-    if (entry->post_delay_sec > 0) {
-        SB_CHECK(sb_uint32_msec_duration_from_float_seconds(
-            &duration_msec, entry->post_delay_sec));
-        SB_CHECK(sb_trajectory_builder_hold_position_for(&builder, duration_msec));
-    }
+    SB_CHECK(sb_uint32_msec_duration_from_float_seconds(
+        &duration_msec, entry->post_delay_sec));
+    SB_CHECK(sb_trajectory_builder_hold_position_for(&builder, duration_msec));
 
-    /* Add smooth descent to the target if needed */
-    if (sb_i_rth_action_has_target(entry->action) && entry->landing_velocity > 0 && isfinite(entry->landing_velocity)) {
+    /* Add smooth descent to the landing altitude if needed */
+    if (entry->landing_velocity > 0 && isfinite(entry->landing_velocity)) {
         float current_altitude = target_with_yaw.z;
         float landing_velocity = entry->landing_velocity;
         float landing_duration_sec;
 
-        target_with_yaw.x = entry->target.x;
-        target_with_yaw.y = entry->target.y;
-        target_with_yaw.z = entry->target.z;
+        target_with_yaw.z = entry->landing_altitude;
 
         landing_duration_sec = fabsf(current_altitude - target_with_yaw.z) / landing_velocity;
 
@@ -616,49 +568,12 @@ sb_error_t sb_trajectory_update_from_rth_plan_entry(
             &builder, target_with_yaw, duration_msec, max_acceleration));
     }
 
+    /* Finalize trajectory */
     retval = sb_trajectory_update_from_builder(trajectory, &builder);
 
-cleanup:
     sb_trajectory_builder_destroy(&builder);
 
     return retval;
-}
-
-/* ************************************************************************** */
-
-/**
- * @brief Returns whether the given RTH action has an associated duration.
- */
-static sb_bool_t sb_i_rth_action_has_duration(sb_rth_action_t action)
-{
-    /* Right now all actions that have a target also have a duration and vice
-     * versa */
-    return sb_i_rth_action_has_target(action);
-}
-
-/**
- * @brief Returns whether the given RTH action has an associated pre-neck phase.
- */
-static sb_bool_t sb_i_rth_action_has_neck(sb_rth_action_t action)
-{
-    return action == SB_RTH_ACTION_GO_TO_WITH_ALTITUDE;
-}
-
-/**
- * @brief Returns whether the given RTH action has an associated target coordinate.
- */
-static sb_bool_t sb_i_rth_action_has_target(sb_rth_action_t action)
-{
-    return (
-        action == SB_RTH_ACTION_GO_ABOVE_KEEPING_ALTITUDE || action == SB_RTH_ACTION_GO_TO_WITH_ALTITUDE);
-}
-
-/**
- * @brief Returns whether the given RTH action has an associated arrival altitude.
- */
-static sb_bool_t sb_i_rth_action_has_arrival_altitude(sb_rth_action_t action)
-{
-    return action == SB_RTH_ACTION_GO_TO_WITH_ALTITUDE;
 }
 
 /* ************************************************************************** */
@@ -689,9 +604,13 @@ static size_t sb_i_rth_plan_parse_header(sb_rth_plan_t* plan)
     /* second byte is "scale", MSB is ignored */
     plan->scale = (float)((buf[1] & 0x7f));
 
-    /* third and fourth bytes are the preferred acceleration */
+    /* parse max acceleration, landing velocity and default landing altitude */
     offset = 2;
     plan->max_acceleration = sb_parse_uint16(buf, &offset);
+    plan->landing_velocity = sb_parse_uint16(buf, &offset);
+    plan->landing_altitude = sb_i_rth_plan_parse_coordinate(plan, &offset);
+
+    /* next two bytes are the preferred */
     plan->num_points = sb_parse_uint16(buf, &offset);
 
     /* Zero in the binary representation means no constraint */
@@ -778,11 +697,23 @@ static sb_error_t sb_i_rth_plan_update_from_parser(sb_rth_plan_t* plan, sb_binar
 
 /* ************************************************************************** */
 
-static void sb_i_rth_plan_entry_clear(sb_rth_plan_entry_t* entry, const sb_rth_plan_t* plan)
+static void sb_i_rth_plan_entry_clear(sb_rth_plan_entry_t* entry, const sb_rth_plan_t* plan, float time_sec)
 {
     memset(entry, 0, sizeof(sb_rth_plan_entry_t));
 
-    entry->action = SB_RTH_ACTION_LAND;
+    entry->time_sec = time_sec;
     entry->max_acceleration = sb_rth_plan_get_default_acceleration_limit(plan);
     entry->landing_velocity = sb_rth_plan_get_default_landing_velocity(plan);
+    entry->landing_altitude = sb_rth_plan_get_default_landing_altitude(plan);
+
+    /* set some default flags because technically these are valid even if they are
+     * just at their default values */
+    /* clang-format off */
+    entry->flags = (
+        SB_RTH_PLAN_ENTRY_HAS_LANDING_ALTITUDE |
+        SB_RTH_PLAN_ENTRY_HAS_PRE_DELAY |
+        SB_RTH_PLAN_ENTRY_HAS_POST_DELAY |
+        SB_RTH_PLAN_ENTRY_HAS_NECK
+    );
+    /* clang-format on */
 }
