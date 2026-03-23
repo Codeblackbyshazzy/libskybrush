@@ -453,3 +453,73 @@ void sb_screenplay_set_rth_plan(sb_screenplay_t* screenplay, sb_rth_plan_t* rth_
     SB_XDECREF(screenplay->rth_plan);
     screenplay->rth_plan = rth_plan;
 }
+
+/**
+ * @brief Returns the time in seconds corresponding to a given warped time in the
+ * first scene with the specified tag.
+ *
+ * This function searches for the scene with the specified tag in the screenplay
+ * and returns the wall clock time (in seconds) that corresponds to the given warped
+ * time in that scene, taking into account the durations (in wall clock time) of all
+ * preceding scenes.
+ *
+ * Returns \c UINT32_MAX (meaning: never, i.e. an infinite amount of time will pass
+ * before we reach the scene with the given tag and the given warped time in it) if any
+ * of the following conditions is true:
+ *
+ * - there is no scene with the given tag
+ * - the scene does not have a time axis
+ * - an infinite scene precedes the scene with the given tag
+ * - the given warped time corresponds to a time instant \em before the start of the
+ *   scene with the given tag (because we are still in one of the preceding scenes at
+ *   that time)
+ * - the given warped time corresponds to a time instant \em after the end of the scene
+ *   with the given tag (because we are already past the scene with the given tag at
+ *   that time)
+ */
+uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
+    sb_screenplay_t* screenplay, sb_screenplay_scene_tag_t tag, float warped_time)
+{
+    uint32_t time_msec = 0;
+    uint32_t duration;
+
+    for (size_t i = 0; i < screenplay->num_scenes; i++) {
+        sb_screenplay_scene_t* scene = screenplay->scenes[i];
+        int32_t time_rel_msec;
+
+        if (scene->tag == tag) {
+            sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(scene);
+            time_rel_msec = sb_time_axis_reverse_map(time_axis, warped_time);
+            if (time_rel_msec < 0) {
+                /* We are still in one of the preceding scenes at the given warped time */
+                return UINT32_MAX;
+            }
+
+            if (time_rel_msec > sb_time_axis_get_total_duration_msec(time_axis)) {
+                /* We are already past the scene with the given tag at the given warped time */
+                return UINT32_MAX;
+            }
+
+            if (time_msec + (uint32_t)time_rel_msec < time_msec) {
+                /* Overflow */
+                return UINT32_MAX;
+            }
+
+            return time_msec + (uint32_t)time_rel_msec;
+        }
+
+        if (sb_screenplay_scene_is_infinite(scene)) {
+            /* Preceding scene has infinite duration -> searched scene will never be active */
+            return UINT32_MAX;
+        }
+
+        duration = sb_screenplay_scene_get_duration_msec(scene);
+        time_msec += duration;
+        if (time_msec < duration) {
+            /* Overflow */
+            return UINT32_MAX;
+        }
+    }
+
+    return time_msec;
+}

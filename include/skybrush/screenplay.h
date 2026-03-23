@@ -181,7 +181,8 @@ sb_screenplay_scene_t* sb_screenplay_get_scene_ptr(
     sb_screenplay_t* screenplay, size_t index);
 sb_screenplay_scene_t* sb_screenplay_get_scene_ptr_at_time_msec(
     sb_screenplay_t* screenplay, uint32_t* time_msec, ssize_t* scene_index);
-
+uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
+    sb_screenplay_t* screenplay, sb_screenplay_scene_tag_t tag, float warped_time);
 void sb_screenplay_clear(sb_screenplay_t* screenplay);
 sb_error_t sb_screenplay_append_new_scene(
     sb_screenplay_t* screenplay, sb_screenplay_scene_t** out_scene);

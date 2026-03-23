@@ -20,6 +20,7 @@
 #include "unity.h"
 
 #include <skybrush/screenplay.h>
+#include <skybrush/time_axis.h>
 
 void setUp(void)
 {
@@ -223,6 +224,113 @@ void test_sb_screenplay_get_scene_ptr_at_time_msec_with_infinite_later_scene(voi
     sb_screenplay_destroy(&screenplay);
 }
 
+void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_missing_tag(void)
+{
+    sb_screenplay_t screenplay;
+    sb_screenplay_scene_t* scene = NULL;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_init(&screenplay));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene));
+    TEST_ASSERT_NOT_NULL(scene);
+
+    sb_screenplay_scene_set_tag(scene, 1);
+
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 2, 0.0f));
+
+    sb_screenplay_destroy(&screenplay);
+}
+
+void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_infinite_preceding(void)
+{
+    sb_screenplay_t screenplay;
+    sb_screenplay_scene_t* scene0 = NULL;
+    sb_screenplay_scene_t* scene1 = NULL;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_init(&screenplay));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene0));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene1));
+    TEST_ASSERT_NOT_NULL(scene1);
+
+    sb_screenplay_scene_set_duration_msec(scene1, 1000u);
+    sb_screenplay_scene_set_tag(scene1, 7);
+
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 7, 0.0f));
+
+    sb_screenplay_destroy(&screenplay);
+}
+
+void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_success_and_bounds(void)
+{
+    sb_screenplay_t screenplay;
+    sb_screenplay_scene_t* scene0 = NULL;
+    sb_screenplay_scene_t* scene1 = NULL;
+    sb_time_axis_t* axis;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_init(&screenplay));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene0));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene1));
+
+    sb_screenplay_scene_set_duration_msec(scene0, 1000u);
+    sb_screenplay_scene_set_duration_msec(scene1, 5000u);
+    sb_screenplay_scene_set_tag(scene1, 3);
+
+    axis = sb_screenplay_scene_get_time_axis(scene1);
+    TEST_ASSERT_NOT_NULL(axis);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis, sb_time_segment_make_constant_rate(5000u, 2.0f)));
+
+    TEST_ASSERT_EQUAL_UINT32(
+        2500u,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 3.0f));
+
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, -1.0f));
+
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 11.0f));
+
+    sb_screenplay_destroy(&screenplay);
+}
+
+void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_with_nonlinear_preceding_scene(void)
+{
+    sb_screenplay_t screenplay;
+    sb_screenplay_scene_t* scene0 = NULL;
+    sb_screenplay_scene_t* scene1 = NULL;
+    sb_time_axis_t* axis0;
+    sb_time_axis_t* axis1;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_init(&screenplay));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene0));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene1));
+
+    sb_screenplay_scene_set_duration_msec(scene0, 2000u);
+    axis0 = sb_screenplay_scene_get_time_axis(scene0);
+    TEST_ASSERT_NOT_NULL(axis0);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis0, sb_time_segment_make(2000u, 1.0f, 3.0f)));
+
+    sb_screenplay_scene_set_duration_msec(scene1, 5000u);
+    sb_screenplay_scene_set_tag(scene1, 4);
+    axis1 = sb_screenplay_scene_get_time_axis(scene1);
+    TEST_ASSERT_NOT_NULL(axis1);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis1, sb_time_segment_make_constant_rate(5000u, 2.0f)));
+
+    TEST_ASSERT_EQUAL_UINT32(
+        4000u,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 4.0f));
+
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX,
+        sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 11.0f));
+
+    sb_screenplay_destroy(&screenplay);
+}
+
 /* New tests for removing the last scene, including empty-case behavior */
 void test_sb_screenplay_remove_last_scene(void)
 {
@@ -370,6 +478,10 @@ int main(void)
     RUN_TEST(test_sb_screenplay_get_scene_ptr_at_time_msec_infinite_first);
     RUN_TEST(test_sb_screenplay_get_scene_ptr_at_time_msec_finite_offsets_and_overflow);
     RUN_TEST(test_sb_screenplay_get_scene_ptr_at_time_msec_with_infinite_later_scene);
+    RUN_TEST(test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_missing_tag);
+    RUN_TEST(test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_infinite_preceding);
+    RUN_TEST(test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_success_and_bounds);
+    RUN_TEST(test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_with_nonlinear_preceding_scene);
     RUN_TEST(test_sb_screenplay_remove_last_scene);
     RUN_TEST(test_screenplay_update_from_binary_file_in_memory);
     RUN_TEST(test_screenplay_update_from_binary_file_in_memory_loads_rth_plan);
