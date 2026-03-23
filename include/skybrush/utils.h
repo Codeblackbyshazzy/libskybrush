@@ -40,7 +40,7 @@ sb_error_t sb_scale_update_altitude(uint8_t* scale, float altitude);
 sb_error_t sb_scale_update_vector2(uint8_t* scale, sb_vector2_t point);
 sb_error_t sb_scale_update_vector3(uint8_t* scale, sb_vector3_t point);
 sb_error_t sb_scale_update_vector3_with_yaw(uint8_t* scale, sb_vector3_with_yaw_t point);
-sb_error_t sb_solve_quadratic(float a, float b, float c, float* roots, uint8_t* num_roots);
+uint8_t sb_solve_quadratic(float a, float b, float c, float* roots);
 sb_error_t sb_uint32_msec_duration_from_float_seconds(uint32_t* result_msec, float duration_sec);
 
 __END_DECLS

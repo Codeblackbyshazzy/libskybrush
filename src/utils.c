@@ -50,43 +50,45 @@ void sb_interval_expand(sb_interval_t* interval, float offset)
  * @param a Quadratic coefficient
  * @param b Linear coefficient
  * @param c Constant coefficient
- * @param roots Output array for roots; must hold at least 2 values
- * @param num_roots Output number of real roots found
- * @return SB_SUCCESS on success, SB_EINVAL if inputs are invalid
+ * @param roots Output array for roots; must hold at least 2 values; \c NULL if not
+ *        interested. When two roots are returned, the smaller one is returned first.
+ * @return The number of real roots found
  */
-sb_error_t sb_solve_quadratic(float a, float b, float c, float* roots, uint8_t* num_roots)
+uint8_t sb_solve_quadratic(float a, float b, float c, float* roots)
 {
     float d;
 
-    if (!roots || !num_roots) {
-        return SB_EINVAL;
-    }
-
     if (fabsf(a) < FLT_MIN) {
         if (fabsf(b) < FLT_MIN) {
-            *num_roots = 0;
-        } else {
-            roots[0] = -c / b;
-            *num_roots = 1;
+            return 0;
         }
-        return SB_SUCCESS;
+
+        if (roots) {
+            roots[0] = -c / b;
+        }
+
+        return 1;
     }
 
     d = b * b - 4.0f * a * c;
 
     if (fabsf(d) < FLT_MIN) {
-        *num_roots = 1;
-        roots[0] = -b / (2.0f * a);
-    } else if (d > 0) {
-        d = sqrtf(d);
-        *num_roots = 2;
-        roots[0] = (-b - d) / (2.0f * a);
-        roots[1] = (-b + d) / (2.0f * a);
-    } else {
-        *num_roots = 0;
+        if (roots) {
+            roots[0] = -b / (2.0f * a);
+        }
+        return 1;
     }
 
-    return SB_SUCCESS;
+    if (d > 0) {
+        d = sqrtf(d);
+        if (roots) {
+            roots[0] = (-b - d) / (2.0f * a);
+            roots[1] = (-b + d) / (2.0f * a);
+        }
+        return 2;
+    }
+
+    return 0;
 }
 
 sb_error_t sb_i_scale_update(uint8_t* scale, float x, float y, float z);

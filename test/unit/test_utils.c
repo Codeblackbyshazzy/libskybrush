@@ -147,24 +147,27 @@ void test_solve_quadratic(void)
     float roots[2] = { 0 };
     uint8_t num_roots = 0;
 
-    TEST_ASSERT_EQUAL(SB_EINVAL, sb_solve_quadratic(1.0f, 2.0f, 3.0f, NULL, &num_roots));
-    TEST_ASSERT_EQUAL(SB_EINVAL, sb_solve_quadratic(1.0f, 2.0f, 3.0f, roots, NULL));
-
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, -5.0f, 6.0f, roots, &num_roots));
-    TEST_ASSERT_EQUAL(2, num_roots);
+    TEST_ASSERT_EQUAL(2, sb_solve_quadratic(1.0f, -5.0f, 6.0f, roots));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, roots[1]);
 
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, -4.0f, 4.0f, roots, &num_roots));
-    TEST_ASSERT_EQUAL(1, num_roots);
+    roots[1] = 4.0f;
+    TEST_ASSERT_EQUAL(1, sb_solve_quadratic(1.0f, -4.0f, 4.0f, roots));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+    /* Check that the second root is untouched */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 4.0f, roots[1]);
 
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(0.0f, 2.0f, -4.0f, roots, &num_roots));
-    TEST_ASSERT_EQUAL(1, num_roots);
+    TEST_ASSERT_EQUAL(1, sb_solve_quadratic(0.0f, 2.0f, -4.0f, roots));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+    /* Check that the second root is untouched */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 4.0f, roots[1]);
 
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, 0.0f, 1.0f, roots, &num_roots));
+    roots[0] = 3.0f;
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, 0.0f, 1.0f, roots));
     TEST_ASSERT_EQUAL(0, num_roots);
+    /* Check that the roots are untouched */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, roots[0]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 4.0f, roots[1]);
 }
 
 void test_bezier_cut_at(void)
