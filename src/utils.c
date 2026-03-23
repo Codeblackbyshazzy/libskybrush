@@ -84,6 +84,12 @@ uint8_t sb_solve_quadratic(float a, float b, float c, float* roots)
         if (roots) {
             roots[0] = (-b - d) / (2.0f * a);
             roots[1] = (-b + d) / (2.0f * a);
+            if (a < 0) {
+                /* If a < 0, the parabola opens downwards, so the larger root is the smaller one. */
+                d = roots[0];
+                roots[0] = roots[1];
+                roots[1] = d;
+            }
         }
         return 2;
     }

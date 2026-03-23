@@ -151,6 +151,11 @@ void test_solve_quadratic(void)
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, roots[1]);
 
+    TEST_ASSERT_EQUAL(2, sb_solve_quadratic(-1.0f, 5.0f, -6.0f, roots));
+    /* Check that the smaller root is returned first even when a < 0 */
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, roots[1]);
+
     roots[1] = 4.0f;
     TEST_ASSERT_EQUAL(1, sb_solve_quadratic(1.0f, -4.0f, 4.0f, roots));
     TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
