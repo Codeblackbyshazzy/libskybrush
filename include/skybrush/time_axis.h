@@ -150,6 +150,8 @@ sb_error_t sb_time_axis_remove_segment_at(
 float sb_time_axis_map(const sb_time_axis_t* axis, int32_t wall_clock_time_msec);
 float sb_time_axis_map_ex(const sb_time_axis_t* axis, int32_t wall_clock_time_msec, float* out_rate);
 
+int32_t sb_time_axis_reverse_map(const sb_time_axis_t* axis, float time);
+
 __END_DECLS
 
 #endif // SKYBRUSH_TIME_AXIS_H

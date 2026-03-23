@@ -22,6 +22,7 @@
 #include <skybrush/basic_types.h>
 #include <skybrush/memory.h>
 #include <skybrush/time_axis.h>
+#include <skybrush/utils.h>
 #include <string.h>
 
 static sb_error_t sb_i_time_segment_validate(const sb_time_segment_t* seg);
@@ -509,23 +510,17 @@ float sb_time_axis_map_ex(const sb_time_axis_t* axis, int32_t wall_clock_time_ms
 {
     float accumulated_warped_time_sec = 0.0f;
     float warped_time_in_segment_sec;
+    float seg_warped_duration_sec;
     const sb_time_segment_t* seg;
     size_t num_segments = sb_time_axis_num_segments(axis);
     uint32_t wall_clock_time_msec_unsigned;
 
-    if (num_segments == 0) {
-        if (out_rate) {
-            *out_rate = 1.0f;
-        }
-        return wall_clock_time_msec / 1000.0f;
-    }
-
     /* We assume that the time axis is simply real-time before the origin */
-    if (wall_clock_time_msec < axis->origin_msec) {
+    if (wall_clock_time_msec < axis->origin_msec || num_segments == 0) {
         if (out_rate) {
             *out_rate = 1.0f;
         }
-        return (axis->origin_msec - wall_clock_time_msec) / -1000.0f;
+        return (wall_clock_time_msec - axis->origin_msec) / 1000.0f;
     }
 
     wall_clock_time_msec -= axis->origin_msec;
@@ -571,7 +566,7 @@ float sb_time_axis_map_ex(const sb_time_axis_t* axis, int32_t wall_clock_time_ms
         } else {
             /* Move to the next segment */
             wall_clock_time_msec_unsigned -= seg_wall_clock_duration_msec;
-            float seg_warped_duration_sec = sb_time_segment_get_duration_in_warped_time_sec(seg);
+            seg_warped_duration_sec = sb_time_segment_get_duration_in_warped_time_sec(seg);
             accumulated_warped_time_sec += seg_warped_duration_sec;
         }
     }
@@ -586,6 +581,95 @@ float sb_time_axis_map_ex(const sb_time_axis_t* axis, int32_t wall_clock_time_ms
         *out_rate = seg->final_rate;
     }
     return accumulated_warped_time_sec + warped_time_in_segment_sec;
+}
+
+/**
+ * @brief Maps a time instant in warped time to the corresponding wall clock time.
+ *
+ * @param axis Pointer to the time axis structure.
+ * @param time Warped time in seconds.
+ * @return Corresponding wall clock time in milliseconds.
+ *         \c INT32_MAX if the warped time is positive and infinite or in case of an overflow,
+ *         \c INT32_MIN if the warped time is negative and infinite.
+ */
+int32_t sb_time_axis_reverse_map(const sb_time_axis_t* axis, float time)
+{
+    const sb_time_segment_t* seg;
+    size_t num_segments = sb_time_axis_num_segments(axis);
+    float remaining_warped_time_sec = time;
+    float seg_warped_duration_sec;
+    float accumulated_wall_clock_time_sec = 0.0f;
+
+    if (isnan(time)) {
+        goto exit;
+    }
+
+    if (!isfinite(time)) {
+        return time < 0 ? INT32_MIN : INT32_MAX; /* LCOV_EXCL_LINE */
+    }
+
+    /* We assume that the time axis is simply real-time before the origin */
+    if (remaining_warped_time_sec < 0 || num_segments == 0) {
+        accumulated_wall_clock_time_sec = remaining_warped_time_sec;
+        goto exit;
+    }
+
+    for (size_t i = 0; i < num_segments && remaining_warped_time_sec > 0; ++i) {
+        seg = sb_time_axis_get_segment(axis, i);
+        seg_warped_duration_sec = sb_time_segment_get_duration_in_warped_time_sec(seg);
+        if (remaining_warped_time_sec < seg_warped_duration_sec) {
+            /* The target time is within this segment */
+            if (!isfinite(seg_warped_duration_sec) || seg->initial_rate == seg->final_rate) {
+                /* Constant rate segment or infinite segment */
+                accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->initial_rate;
+            } else if (seg_warped_duration_sec > 0) {
+                /* Linearly changing rate segment */
+                float roots[2];
+                uint8_t num_roots;
+
+                /* The equation to solve is:
+                 *  remaining_warped_time_sec = (initial_rate + delta_rate / 2.0f * (t / T)) * t
+                 *
+                 * where t is the wall clock time we want to find, and T is the total wall
+                 * clock duration of the segment. This can be rearranged to:
+                 *
+                 *  delta_rate / (2.0f * T) * t^2 + initial_rate * t - remaining_warped_time_sec = 0
+                 */
+                num_roots = sb_solve_quadratic(
+                    (seg->final_rate - seg->initial_rate) / (2.0f * sb_time_segment_get_duration_in_wall_clock_time_sec(seg)),
+                    seg->initial_rate,
+                    -remaining_warped_time_sec,
+                    roots);
+
+                if (num_roots == 0) {
+                    /* No solution, should not happen */
+                } else if (num_roots == 1) {
+                    /* One solution */
+                    accumulated_wall_clock_time_sec += roots[0];
+                } else {
+                    /* Two solutions. roots[0] is always the smaller, and we aim to
+                     * return the positive one if we have one. */
+                    accumulated_wall_clock_time_sec += (roots[0] >= 0) ? roots[0] : roots[1];
+                }
+            }
+
+            remaining_warped_time_sec = 0;
+        } else {
+            /* Move to the next segment */
+            remaining_warped_time_sec -= seg_warped_duration_sec;
+            accumulated_wall_clock_time_sec += sb_time_segment_get_duration_in_wall_clock_time_sec(seg);
+        }
+    }
+
+    /* Reached last segment. Pretend that time keeps on flowing with the final rate
+     * of the last segment.
+     */
+    assert(num_segments > 0);
+    seg = sb_time_axis_get_segment(axis, num_segments - 1);
+    accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->final_rate;
+
+exit:
+    return axis->origin_msec + (int32_t)(accumulated_wall_clock_time_sec * 1000.0f);
 }
 
 /* ********************************************************************************** */

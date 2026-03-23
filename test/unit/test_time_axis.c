@@ -259,6 +259,18 @@ void test_time_axis_get_total_warped_duration_sec(void)
 
 /* Tests for sb_time_axis_map() */
 
+void test_time_axis_map_empty_axis(void)
+{
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, sb_time_axis_map(&axis, 0));
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 2.5f, sb_time_axis_map(&axis, 2500));
+    TEST_ASSERT_FLOAT_WITHIN(EPS, -1.5f, sb_time_axis_map(&axis, -1500));
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_set_origin_sec(&axis, 10.0f));
+    TEST_ASSERT_FLOAT_WITHIN(EPS, -1.0f, sb_time_axis_map(&axis, 9000));
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, sb_time_axis_map(&axis, 10000));
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 1.5f, sb_time_axis_map(&axis, 11500));
+}
+
 /* Single constant-rate segment: mapping is linear with the rate */
 void test_time_axis_map_single_constant_segment(void)
 {
@@ -441,6 +453,58 @@ void test_time_axis_map_ex_three_segment_scenario(void)
     TEST_ASSERT_FLOAT_WITHIN(EPS, 1.0f, rate);
 }
 
+void test_time_axis_reverse_map_empty_axis(void)
+{
+    TEST_ASSERT_EQUAL_INT32(2500, sb_time_axis_reverse_map(&axis, 2.5f));
+    TEST_ASSERT_EQUAL_INT32(-1500, sb_time_axis_reverse_map(&axis, -1.5f));
+}
+
+void test_time_axis_reverse_map_single_constant_segment(void)
+{
+    sb_time_segment_t s = sb_time_segment_make_constant_rate(5000, 2.0f);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, s));
+
+    TEST_ASSERT_EQUAL_INT32(1500, sb_time_axis_reverse_map(&axis, 3.0f));
+    TEST_ASSERT_EQUAL_INT32(5000, sb_time_axis_reverse_map(&axis, 10.0f));
+    TEST_ASSERT_EQUAL_INT32(7000, sb_time_axis_reverse_map(&axis, 14.0f));
+}
+
+void test_time_axis_reverse_map_across_segments(void)
+{
+    sb_time_segment_t a = sb_time_segment_make_constant_rate(2000, 1.0f);
+    sb_time_segment_t b = sb_time_segment_make_constant_rate(3000, 2.0f);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, a));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, b));
+
+    TEST_ASSERT_EQUAL_INT32(1500, sb_time_axis_reverse_map(&axis, 1.5f));
+    TEST_ASSERT_EQUAL_INT32(2000, sb_time_axis_reverse_map(&axis, 2.0f));
+    TEST_ASSERT_EQUAL_INT32(2500, sb_time_axis_reverse_map(&axis, 3.0f));
+    TEST_ASSERT_EQUAL_INT32(4500, sb_time_axis_reverse_map(&axis, 7.0f));
+    TEST_ASSERT_EQUAL_INT32(5000, sb_time_axis_reverse_map(&axis, 8.0f));
+    TEST_ASSERT_EQUAL_INT32(6000, sb_time_axis_reverse_map(&axis, 10.0f));
+}
+
+void test_time_axis_reverse_map_linear_changing_rate(void)
+{
+    sb_time_segment_t s = sb_time_segment_make(2000, 1.0f, 3.0f);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, s));
+
+    TEST_ASSERT_EQUAL_INT32(1000, sb_time_axis_reverse_map(&axis, 1.5f));
+    TEST_ASSERT_EQUAL_INT32(1500, sb_time_axis_reverse_map(&axis, 2.625f));
+}
+
+void test_time_axis_reverse_map_origin_shift(void)
+{
+    sb_time_segment_t s = sb_time_segment_make_constant_rate(5000, 2.0f);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, s));
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_set_origin_sec(&axis, 10.0f));
+
+    TEST_ASSERT_EQUAL_INT32(9000, sb_time_axis_reverse_map(&axis, -1.0f));
+    TEST_ASSERT_EQUAL_INT32(11500, sb_time_axis_reverse_map(&axis, 3.0f));
+}
+
 /* Additional mapping scenario test:
  * Three segments:
  *  - realtime for 5s
@@ -469,14 +533,22 @@ void test_time_axis_map_three_segment_scenario(void)
     float warped_s2 = sb_time_segment_get_duration_in_warped_time_sec(&s2); /* 5 * 0.5 = 2.5 */
     float warped_s3 = sb_time_segment_get_duration_in_warped_time_sec(&s3); /* 5 * 1 = 5 */
 
+    float warped = 0.0f;
+
     /* t = 0 (start) */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, sb_time_axis_map(&axis, 0));
+    warped = sb_time_axis_map(&axis, 0);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, warped);
+    TEST_ASSERT_EQUAL_INT32(0, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 2 (within first realtime segment) => warped = 2 */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, 2.0f, sb_time_axis_map(&axis, 2000));
+    warped = sb_time_axis_map(&axis, 2000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 2.0f, warped);
+    TEST_ASSERT_EQUAL_INT32(2000, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 5 (boundary between seg1 and seg2) => warped = warped_s1 = 5 */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1, sb_time_axis_map(&axis, 5000));
+    warped = sb_time_axis_map(&axis, 5000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1, warped);
+    TEST_ASSERT_EQUAL_INT32(5000, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 7 (2s into seg2). For seg2: initial=1 final=0, d=5
      * warped_in_seg = initial*t_in + ((final-initial)/(2*d)) * t_in^2
@@ -486,16 +558,24 @@ void test_time_axis_map_three_segment_scenario(void)
     float t_in_seg2 = 2.0f;
     float warped_in_seg2 = t_in_seg2 - 0.1f * t_in_seg2 * t_in_seg2; /* 2 - 0.4 */
     float expected7 = warped_s1 + warped_in_seg2;
-    TEST_ASSERT_FLOAT_WITHIN(EPS, expected7, sb_time_axis_map(&axis, 7000));
+    warped = sb_time_axis_map(&axis, 7000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, expected7, warped);
+    TEST_ASSERT_EQUAL_INT32(7000, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 10 (end of seg2) => warped = warped_s1 + warped_s2 = 7.5 */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2, sb_time_axis_map(&axis, 10000));
+    warped = sb_time_axis_map(&axis, 10000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2, warped);
+    TEST_ASSERT_EQUAL_INT32(10000, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 12 (2s into seg3) => warped = warped_s1 + warped_s2 + 2*1 = 7.5 + 2 = 9.5 */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2 + 2.0f, sb_time_axis_map(&axis, 12000));
+    warped = sb_time_axis_map(&axis, 12000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2 + 2.0f, warped);
+    TEST_ASSERT_EQUAL_INT32(12000, sb_time_axis_reverse_map(&axis, warped));
 
     /* t = 15 (end of seg3) => warped = sum = 5 + 2.5 + 5 = 12.5 */
-    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2 + warped_s3, sb_time_axis_map(&axis, 15000));
+    warped = sb_time_axis_map(&axis, 15000);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, warped_s1 + warped_s2 + warped_s3, warped);
+    TEST_ASSERT_EQUAL_INT32(15000, sb_time_axis_reverse_map(&axis, warped));
 }
 
 /* Tests for insert/remove segment functions */
@@ -727,6 +807,7 @@ int main(int argc, char* argv[])
     RUN_TEST(test_time_axis_get_total_warped_duration_sec);
 
     /* sb_time_axis_map tests */
+    RUN_TEST(test_time_axis_map_empty_axis);
     RUN_TEST(test_time_axis_map_single_constant_segment);
     RUN_TEST(test_time_axis_map_across_segments);
     RUN_TEST(test_time_axis_map_linear_changing_rate);
@@ -737,6 +818,13 @@ int main(int argc, char* argv[])
     RUN_TEST(test_time_axis_map_ex_across_segments);
     RUN_TEST(test_time_axis_map_ex_linear_changing_rate);
     RUN_TEST(test_time_axis_map_ex_three_segment_scenario);
+
+    /* sb_time_axis_reverse_map tests */
+    RUN_TEST(test_time_axis_reverse_map_empty_axis);
+    RUN_TEST(test_time_axis_reverse_map_single_constant_segment);
+    RUN_TEST(test_time_axis_reverse_map_across_segments);
+    RUN_TEST(test_time_axis_reverse_map_linear_changing_rate);
+    RUN_TEST(test_time_axis_reverse_map_origin_shift);
 
     /* origin-shift tests */
     RUN_TEST(test_time_axis_map_origin_shift_constant_segment);
