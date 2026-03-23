@@ -175,7 +175,7 @@ void test_show_controller_scene_transition_switches_players(void)
     TEST_ASSERT_NOT_NULL(traj_empty = sb_trajectory_new());
     sb_screenplay_scene_set_trajectory(ch0, traj_empty);
     /* finite duration 1000 ms for first scene */
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(ch0, 1000u));
+    sb_screenplay_scene_set_duration_msec(ch0, 1000u);
 
     /* For scene 1 load real trajectory and light program from fixture */
     fp = fopen("fixtures/test.skyb", "rb");
@@ -636,7 +636,7 @@ void test_show_controller_current_scene_dropped_on_scene_removal(void)
     TEST_ASSERT_NOT_NULL(scene1);
 
     /* Make first scene finite to be able to switch to second scene */
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(scene0, 1000u));
+    sb_screenplay_scene_set_duration_msec(scene0, 1000u);
 
     /* Initialize controller with the screenplay */
     err = sb_show_controller_init(&ctrl, &screenplay);
@@ -681,8 +681,8 @@ void test_show_controller_get_current_scene(void)
     TEST_ASSERT_NOT_NULL(scene1);
 
     /* Give each scene a finite duration of 1000 ms so the screenplay spans 0..2000 ms */
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(scene0, 1000u));
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(scene1, 1000u));
+    sb_screenplay_scene_set_duration_msec(scene0, 1000u);
+    sb_screenplay_scene_set_duration_msec(scene1, 1000u);
 
     /* Check reference counts of scenes. They should have one owner, the screenplay
      * itself; the pointers that we have here are borrowed references. */

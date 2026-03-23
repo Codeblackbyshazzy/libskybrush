@@ -295,6 +295,7 @@ void test_screenplay_update_from_binary_file_in_memory(void)
 
     /* duration must be infinite and time axis must be reset */
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, sb_screenplay_scene_get_duration_msec(scene));
+    TEST_ASSERT_TRUE(sb_screenplay_scene_is_infinite(scene));
     TEST_ASSERT_EQUAL(0, sb_time_axis_num_segments(sb_screenplay_scene_get_time_axis(scene)));
 
     /* update screenplay from null data */

@@ -159,7 +159,7 @@ uint32_t sb_screenplay_scene_get_duration_msec(
 float sb_screenplay_scene_get_duration_sec(
     const sb_screenplay_scene_t* scene)
 {
-    if (scene->duration_msec == UINT32_MAX) {
+    if (sb_screenplay_scene_is_infinite(scene)) {
         return INFINITY;
     } else {
         return scene->duration_msec / 1000.0f;
@@ -175,6 +175,17 @@ float sb_screenplay_scene_get_duration_sec(
 sb_screenplay_scene_tag_t sb_screenplay_scene_get_tag(const sb_screenplay_scene_t* scene)
 {
     return scene->tag;
+}
+
+/**
+ * @brief Returns whether the duration of a scene is infinite.
+ *
+ * @param scene  the scene to query
+ * @return \c true if the duration of the scene is infinite, \c false otherwise
+ */
+sb_bool_t sb_screenplay_scene_is_infinite(const sb_screenplay_scene_t* scene)
+{
+    return scene->duration_msec == UINT32_MAX;
 }
 
 /**
@@ -241,11 +252,10 @@ void sb_screenplay_scene_set_events(
  * @return \c SB_SUCCESS if the duration was set successfully
  *         \c SB_EINVAL if the duration is invalid
  */
-sb_error_t sb_screenplay_scene_set_duration_msec(
+void sb_screenplay_scene_set_duration_msec(
     sb_screenplay_scene_t* scene, uint32_t duration_msec)
 {
     scene->duration_msec = duration_msec;
-    return SB_SUCCESS;
 }
 
 /**
@@ -260,7 +270,7 @@ sb_error_t sb_screenplay_scene_set_duration_sec(
     sb_screenplay_scene_t* scene, float duration_sec)
 {
     if (isinf(duration_sec) && duration_sec > 0) {
-        scene->duration_msec = UINT32_MAX;
+        sb_screenplay_scene_set_infinite(scene);
     } else if (duration_sec < 0 || !isfinite(duration_sec)) {
         return SB_EINVAL;
     } else {
@@ -281,6 +291,16 @@ sb_error_t sb_screenplay_scene_set_duration_sec(
         scene->duration_msec = duration_msec_u;
     }
     return SB_SUCCESS;
+}
+
+/**
+ * @brief Sets the duration of a scene to infinite.
+ *
+ * @param scene  the scene to modify
+ */
+void sb_screenplay_scene_set_infinite(sb_screenplay_scene_t* scene)
+{
+    sb_screenplay_scene_set_duration_msec(scene, UINT32_MAX);
 }
 
 /**
@@ -309,7 +329,7 @@ void sb_screenplay_scene_reset(sb_screenplay_scene_t* scene)
     sb_screenplay_scene_set_light_program(scene, NULL);
     sb_screenplay_scene_set_yaw_control(scene, NULL);
     sb_screenplay_scene_set_events(scene, NULL);
-    sb_screenplay_scene_set_duration_msec(scene, UINT32_MAX);
+    sb_screenplay_scene_set_infinite(scene);
     sb_screenplay_scene_set_tag(scene, 0);
     sb_time_axis_clear(&scene->time_axis);
 }

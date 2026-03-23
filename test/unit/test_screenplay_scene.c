@@ -78,6 +78,7 @@ void test_screenplay_scene_init_sets_defaults(void)
     /* Duration must be infinite by default */
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, sb_screenplay_scene_get_duration_msec(&scene));
     TEST_ASSERT_EQUAL_FLOAT(INFINITY, sb_screenplay_scene_get_duration_sec(&scene));
+    TEST_ASSERT_TRUE(sb_screenplay_scene_is_infinite(&scene));
 
     /* Optional pointers must be NULL */
     TEST_ASSERT_NULL(sb_screenplay_scene_get_trajectory(&scene));
@@ -204,6 +205,7 @@ void test_screenplay_scene_set_duration_sec_finite_rounding(void)
 
     TEST_ASSERT_EQUAL_UINT32(1235u, sb_screenplay_scene_get_duration_msec(&scene));
     TEST_ASSERT_EQUAL_FLOAT(1235.0f / 1000.0f, sb_screenplay_scene_get_duration_sec(&scene));
+    TEST_ASSERT_FALSE(sb_screenplay_scene_is_infinite(&scene));
 
     SB_DECREF_STATIC(&scene);
 }
@@ -235,8 +237,7 @@ void test_screenplay_scene_set_duration_sec_negative_is_invalid_and_preserves_ol
     TEST_ASSERT_EQUAL(SB_SUCCESS, err);
 
     /* Set a known finite duration first */
-    err = sb_screenplay_scene_set_duration_msec(&scene, 2000u);
-    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    sb_screenplay_scene_set_duration_msec(&scene, 2000u);
     TEST_ASSERT_EQUAL_UINT32(2000u, sb_screenplay_scene_get_duration_msec(&scene));
 
     /* Now try to set a negative duration -> should fail and preserve old */
@@ -256,8 +257,7 @@ void test_screenplay_scene_set_duration_sec_nan_is_invalid_and_preserves_old(voi
     TEST_ASSERT_EQUAL(SB_SUCCESS, err);
 
     /* Set a known finite duration first */
-    err = sb_screenplay_scene_set_duration_msec(&scene, 3000u);
-    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    sb_screenplay_scene_set_duration_msec(&scene, 3000u);
     TEST_ASSERT_EQUAL_UINT32(3000u, sb_screenplay_scene_get_duration_msec(&scene));
 
     /* Now try to set NaN -> should fail and preserve old */
@@ -277,8 +277,7 @@ void test_screenplay_scene_set_duration_sec_too_large_is_invalid_and_preserves_o
     TEST_ASSERT_EQUAL(SB_SUCCESS, err);
 
     /* Set a known finite duration first */
-    err = sb_screenplay_scene_set_duration_msec(&scene, 4000u);
-    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    sb_screenplay_scene_set_duration_msec(&scene, 4000u);
     TEST_ASSERT_EQUAL_UINT32(4000u, sb_screenplay_scene_get_duration_msec(&scene));
 
     /* Choose a duration that will result in duration_msec_f > UINT32_MAX */
@@ -300,8 +299,7 @@ void test_screenplay_scene_set_duration_sec_rounds_to_uint32_max_is_invalid_and_
     TEST_ASSERT_EQUAL(SB_SUCCESS, err);
 
     /* Set a known finite duration first */
-    err = sb_screenplay_scene_set_duration_msec(&scene, 5000u);
-    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    sb_screenplay_scene_set_duration_msec(&scene, 5000u);
     TEST_ASSERT_EQUAL_UINT32(5000u, sb_screenplay_scene_get_duration_msec(&scene));
 
     /* Create a duration that is <= UINT32_MAX but which will round to UINT32_MAX.
@@ -358,7 +356,7 @@ void test_screenplay_scene_reset(void)
     TEST_ASSERT_EQUAL(2, SB_REFCNT(&events));
 
     /* set finite duration and add a time axis segment so clearing is visible */
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(&scene, 1234u));
+    sb_screenplay_scene_set_duration_msec(&scene, 1234u);
     sb_time_axis_t* axis = sb_screenplay_scene_get_time_axis(&scene);
     TEST_ASSERT_NOT_NULL(axis);
     /* append a constant-rate segment (duration 1000 ms) */
@@ -509,7 +507,7 @@ void test_screenplay_scene_clear_contents_preserves_duration_and_time_axis(void)
     TEST_ASSERT_EQUAL(2, SB_REFCNT(&yaw));
     TEST_ASSERT_EQUAL(2, SB_REFCNT(&events));
 
-    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_set_duration_msec(&scene, 4321u));
+    sb_screenplay_scene_set_duration_msec(&scene, 4321u);
     axis = sb_screenplay_scene_get_time_axis(&scene);
     TEST_ASSERT_NOT_NULL(axis);
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis, sb_time_segment_make_constant_rate(1000u, 1.0f)));
@@ -589,6 +587,7 @@ void test_screenplay_scene_update_from_binary_file_in_memory(void)
 
     /* duration must be infinite and time axis must be reset */
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, sb_screenplay_scene_get_duration_msec(&scene));
+    TEST_ASSERT_TRUE(sb_screenplay_scene_is_infinite(&scene));
     TEST_ASSERT_EQUAL(0, sb_time_axis_num_segments(sb_screenplay_scene_get_time_axis(&scene)));
 
     /* tag must be reset */
@@ -605,6 +604,7 @@ void test_screenplay_scene_update_from_binary_file_in_memory(void)
 
     /* duration must be infinite and time axis must be reset */
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, sb_screenplay_scene_get_duration_msec(&scene));
+    TEST_ASSERT_TRUE(sb_screenplay_scene_is_infinite(&scene));
     TEST_ASSERT_EQUAL(0, sb_time_axis_num_segments(sb_screenplay_scene_get_time_axis(&scene)));
 
     /* cleanup: destroy scene while buffer is still valid, then free buffer */

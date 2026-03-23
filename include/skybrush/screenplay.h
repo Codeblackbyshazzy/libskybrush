@@ -116,11 +116,13 @@ sb_screenplay_scene_tag_t sb_screenplay_scene_get_tag(
 sb_time_axis_t* sb_screenplay_scene_get_time_axis(sb_screenplay_scene_t* scene);
 float sb_screenplay_scene_get_warped_time_remaining_from_trajectory_at_end_of_time_axis(
     sb_screenplay_scene_t* scene);
+sb_bool_t sb_screenplay_scene_is_infinite(const sb_screenplay_scene_t* scene);
 
-sb_error_t sb_screenplay_scene_set_duration_msec(
+void sb_screenplay_scene_set_duration_msec(
     sb_screenplay_scene_t* scene, uint32_t duration_msec);
 sb_error_t sb_screenplay_scene_set_duration_sec(
     sb_screenplay_scene_t* scene, float duration_sec);
+void sb_screenplay_scene_set_infinite(sb_screenplay_scene_t* scene);
 void sb_screenplay_scene_set_trajectory(
     sb_screenplay_scene_t* scene, sb_trajectory_t* trajectory);
 void sb_screenplay_scene_set_light_program(
