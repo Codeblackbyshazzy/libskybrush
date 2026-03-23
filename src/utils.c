@@ -17,6 +17,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <float.h>
 #include <math.h>
 #include <skybrush/utils.h>
 
@@ -41,6 +42,51 @@ void sb_interval_expand(sb_interval_t* interval, float offset)
     if (interval->max < interval->min) {
         interval->min = interval->max = interval->min + (interval->max - interval->min) / 2.0f;
     }
+}
+
+/**
+ * @brief Solves the quadratic equation a*x^2 + b*x + c = 0 for real roots.
+ *
+ * @param a Quadratic coefficient
+ * @param b Linear coefficient
+ * @param c Constant coefficient
+ * @param roots Output array for roots; must hold at least 2 values
+ * @param num_roots Output number of real roots found
+ * @return SB_SUCCESS on success, SB_EINVAL if inputs are invalid
+ */
+sb_error_t sb_solve_quadratic(float a, float b, float c, float* roots, uint8_t* num_roots)
+{
+    float d;
+
+    if (!roots || !num_roots) {
+        return SB_EINVAL;
+    }
+
+    if (fabsf(a) < FLT_MIN) {
+        if (fabsf(b) < FLT_MIN) {
+            *num_roots = 0;
+        } else {
+            roots[0] = -c / b;
+            *num_roots = 1;
+        }
+        return SB_SUCCESS;
+    }
+
+    d = b * b - 4.0f * a * c;
+
+    if (fabsf(d) < FLT_MIN) {
+        *num_roots = 1;
+        roots[0] = -b / (2.0f * a);
+    } else if (d > 0) {
+        d = sqrtf(d);
+        *num_roots = 2;
+        roots[0] = (-b - d) / (2.0f * a);
+        roots[1] = (-b + d) / (2.0f * a);
+    } else {
+        *num_roots = 0;
+    }
+
+    return SB_SUCCESS;
 }
 
 sb_error_t sb_i_scale_update(uint8_t* scale, float x, float y, float z);

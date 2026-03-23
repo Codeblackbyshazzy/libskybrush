@@ -142,6 +142,31 @@ void test_scale_update_vector3_with_yaw(void)
     TEST_ASSERT_EQUAL(SB_EOVERFLOW, sb_scale_update_vector3_with_yaw(&scale, vec));
 }
 
+void test_solve_quadratic(void)
+{
+    float roots[2] = { 0 };
+    uint8_t num_roots = 0;
+
+    TEST_ASSERT_EQUAL(SB_EINVAL, sb_solve_quadratic(1.0f, 2.0f, 3.0f, NULL, &num_roots));
+    TEST_ASSERT_EQUAL(SB_EINVAL, sb_solve_quadratic(1.0f, 2.0f, 3.0f, roots, NULL));
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, -5.0f, 6.0f, roots, &num_roots));
+    TEST_ASSERT_EQUAL(2, num_roots);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 3.0f, roots[1]);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, -4.0f, 4.0f, roots, &num_roots));
+    TEST_ASSERT_EQUAL(1, num_roots);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(0.0f, 2.0f, -4.0f, roots, &num_roots));
+    TEST_ASSERT_EQUAL(1, num_roots);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6f, 2.0f, roots[0]);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_solve_quadratic(1.0f, 0.0f, 1.0f, roots, &num_roots));
+    TEST_ASSERT_EQUAL(0, num_roots);
+}
+
 void test_bezier_cut_at(void)
 {
     float dst[8];
@@ -239,6 +264,7 @@ int main(int argc, char* argv[])
 
     RUN_TEST(test_scale_update_vector3);
     RUN_TEST(test_scale_update_vector3_with_yaw);
+    RUN_TEST(test_solve_quadratic);
     RUN_TEST(test_bezier_cut_at);
 
     return UNITY_END();
