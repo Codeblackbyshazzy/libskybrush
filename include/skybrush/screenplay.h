@@ -38,6 +38,8 @@
 
 __BEGIN_DECLS
 
+typedef uint8_t sb_screenplay_scene_tag_t;
+
 /**
  * @brief A single scene in a \c sb_screenplay_t.
  *
@@ -51,7 +53,10 @@ __BEGIN_DECLS
 typedef struct sb_screenplay_scene_s {
     SB_REFCOUNTED;
 
-    /** The duration of the scene, in milliseconds. \c UINT32_MAX means infinite. */
+    /**
+     * The duration of the scene, in wall clock time, in milliseconds. \c UINT32_MAX
+     * means infinite.
+     */
     uint32_t duration_msec;
 
     /** The time axis of the scene. */
@@ -80,6 +85,15 @@ typedef struct sb_screenplay_scene_s {
      * emitted while playing the scene.
      */
     sb_event_list_t* events;
+
+    /**
+     * Identifier of the scene. This is an opaque number that can be used for any
+     * purposes by the owner of this structure. It is deliberately _not_ called "ID"
+     * to avoid the impression that any sort of uniqueness is guaranteed.
+     *
+     * THe tag of a newly generated scene is 0.
+     */
+    sb_screenplay_scene_tag_t tag;
 } sb_screenplay_scene_t;
 
 sb_screenplay_scene_t* sb_screenplay_scene_new(void);
@@ -97,6 +111,8 @@ sb_yaw_control_t* sb_screenplay_scene_get_yaw_control(
     sb_screenplay_scene_t* scene);
 sb_event_list_t* sb_screenplay_scene_get_events(
     sb_screenplay_scene_t* scene);
+sb_screenplay_scene_tag_t sb_screenplay_scene_get_tag(
+    const sb_screenplay_scene_t* scene);
 sb_time_axis_t* sb_screenplay_scene_get_time_axis(sb_screenplay_scene_t* scene);
 float sb_screenplay_scene_get_warped_time_remaining_from_trajectory_at_end_of_time_axis(
     sb_screenplay_scene_t* scene);
@@ -113,6 +129,8 @@ void sb_screenplay_scene_set_yaw_control(
     sb_screenplay_scene_t* scene, sb_yaw_control_t* yaw_control);
 void sb_screenplay_scene_set_events(
     sb_screenplay_scene_t* scene, sb_event_list_t* events);
+void sb_screenplay_scene_set_tag(
+    sb_screenplay_scene_t* scene, sb_screenplay_scene_tag_t tag);
 
 void sb_screenplay_scene_clear_contents(sb_screenplay_scene_t* scene);
 void sb_screenplay_scene_reset(sb_screenplay_scene_t* scene);

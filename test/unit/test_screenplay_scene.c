@@ -88,7 +88,29 @@ void test_screenplay_scene_init_sets_defaults(void)
     /* Time axis must be initialized and empty */
     TEST_ASSERT_EQUAL(0, sb_time_axis_num_segments(sb_screenplay_scene_get_time_axis(&scene)));
 
+    /* Tag must be zero */
+    TEST_ASSERT_EQUAL(0, sb_screenplay_scene_get_tag(&scene));
+
     /* Clean up */
+    SB_DECREF_STATIC(&scene);
+}
+
+void test_screenplay_scene_get_and_set_tag(void)
+{
+    sb_screenplay_scene_t scene;
+    sb_error_t err;
+
+    err = sb_screenplay_scene_init(&scene);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+
+    TEST_ASSERT_EQUAL(0, sb_screenplay_scene_get_tag(&scene));
+
+    sb_screenplay_scene_set_tag(&scene, 42);
+    TEST_ASSERT_EQUAL(42, sb_screenplay_scene_get_tag(&scene));
+
+    sb_screenplay_scene_set_tag(&scene, 255);
+    TEST_ASSERT_EQUAL(255, sb_screenplay_scene_get_tag(&scene));
+
     SB_DECREF_STATIC(&scene);
 }
 
@@ -550,6 +572,10 @@ void test_screenplay_scene_update_from_binary_file_in_memory(void)
 
     fclose(fp);
 
+    /* set an arbitrary tag */
+    sb_screenplay_scene_set_tag(&scene, 42);
+    TEST_ASSERT_EQUAL(42, sb_screenplay_scene_get_tag(&scene));
+
     /* update scene from in-memory binary show */
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_update_from_binary_file_in_memory(&scene, buf, num_bytes));
 
@@ -564,6 +590,9 @@ void test_screenplay_scene_update_from_binary_file_in_memory(void)
     /* duration must be infinite and time axis must be reset */
     TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, sb_screenplay_scene_get_duration_msec(&scene));
     TEST_ASSERT_EQUAL(0, sb_time_axis_num_segments(sb_screenplay_scene_get_time_axis(&scene)));
+
+    /* tag must be reset */
+    TEST_ASSERT_EQUAL(0, sb_screenplay_scene_get_tag(&scene));
 
     /* now update from empty data */
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_update_from_binary_file_in_memory(&scene, 0, 0));
@@ -776,6 +805,7 @@ int main(void)
     UNITY_BEGIN();
 
     RUN_TEST(test_screenplay_scene_init_sets_defaults);
+    RUN_TEST(test_screenplay_scene_get_and_set_tag);
     RUN_TEST(test_screenplay_scene_getters_and_setters);
     RUN_TEST(test_screenplay_scene_set_duration_sec_finite_rounding);
     RUN_TEST(test_screenplay_scene_set_duration_sec_infinite);

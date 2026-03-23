@@ -65,6 +65,8 @@ sb_error_t sb_screenplay_scene_init(sb_screenplay_scene_t* scene)
     scene->yaw_control = NULL;
     scene->events = NULL;
 
+    scene->tag = 0;
+
     SB_REF_INIT(scene, sb_i_screenplay_scene_destroy);
 
     return SB_SUCCESS;
@@ -162,6 +164,17 @@ float sb_screenplay_scene_get_duration_sec(
     } else {
         return scene->duration_msec / 1000.0f;
     }
+}
+
+/**
+ * @brief Returns the tag of a scene.\
+ *
+ * @param scene  the scene to query
+ * @return the tag of the scene
+ */
+sb_screenplay_scene_tag_t sb_screenplay_scene_get_tag(const sb_screenplay_scene_t* scene)
+{
+    return scene->tag;
 }
 
 /**
@@ -271,11 +284,22 @@ sb_error_t sb_screenplay_scene_set_duration_sec(
 }
 
 /**
+ * @brief Sets the tag of a scene.
+ *
+ * @param scene  the scene to modify
+ * @param tag    the tag to set
+ */
+void sb_screenplay_scene_set_tag(sb_screenplay_scene_t* scene, sb_screenplay_scene_tag_t tag)
+{
+    scene->tag = tag;
+}
+
+/**
  * @brief Resets the screenplay scene to its default state.
  *
  * All associated objects of the screenplay scene will be cleared. The time axis
  * will be reset to its initial state with no segments and origin at 0 ms. The duration
- * will be set to infinite.
+ * will be set to infinite. The tag will be reset to 0.
  *
  * @param scene  the screenplay scene to reset
  */
@@ -286,6 +310,7 @@ void sb_screenplay_scene_reset(sb_screenplay_scene_t* scene)
     sb_screenplay_scene_set_yaw_control(scene, NULL);
     sb_screenplay_scene_set_events(scene, NULL);
     sb_screenplay_scene_set_duration_msec(scene, UINT32_MAX);
+    sb_screenplay_scene_set_tag(scene, 0);
     sb_time_axis_clear(&scene->time_axis);
 }
 
@@ -299,8 +324,9 @@ void sb_screenplay_scene_reset(sb_screenplay_scene_t* scene)
  * if it cannot be loaded, an error will be returned.
  *
  * The duration of the screenplay scene will be set to infinity. The time axis
- * will be reset. In other words, assume that `sb_screenplay_scene_reset()` is called
- * before loading the components from the show file.
+ * will be reset. The tag of the scene will be set to zero. In other words, assume that
+ * `sb_screenplay_scene_reset()` is called before loading the components from the show
+ * file.
  *
  * @param scene    the screenplay scene to update
  * @param show_data  pointer to the binary show file data in memory. May be NULL.
