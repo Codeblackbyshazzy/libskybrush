@@ -19,6 +19,7 @@
 
 #include "unity.h"
 
+#include <math.h>
 #include <skybrush/screenplay.h>
 #include <skybrush/time_axis.h>
 
@@ -238,6 +239,9 @@ void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_mis
     TEST_ASSERT_EQUAL_UINT32(
         UINT32_MAX,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 2, 0.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        INFINITY,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 2, 0.0f));
 
     sb_screenplay_destroy(&screenplay);
 }
@@ -259,6 +263,9 @@ void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_inf
     TEST_ASSERT_EQUAL_UINT32(
         UINT32_MAX,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 7, 0.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        INFINITY,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 7, 0.0f));
 
     sb_screenplay_destroy(&screenplay);
 }
@@ -285,14 +292,23 @@ void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_suc
     TEST_ASSERT_EQUAL_UINT32(
         2500u,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 3.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        2.5f,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 3.0f));
 
     TEST_ASSERT_EQUAL_UINT32(
         UINT32_MAX,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, -1.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        INFINITY,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, -1.0f));
 
     TEST_ASSERT_EQUAL_UINT32(
         UINT32_MAX,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 11.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        INFINITY,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 3, 11.0f));
 
     sb_screenplay_destroy(&screenplay);
 }
@@ -323,10 +339,16 @@ void test_sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene_wit
     TEST_ASSERT_EQUAL_UINT32(
         4000u,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 4.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        4.0f,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 4.0f));
 
     TEST_ASSERT_EQUAL_UINT32(
         UINT32_MAX,
         sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 11.0f));
+    TEST_ASSERT_EQUAL_FLOAT(
+        INFINITY,
+        sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(&screenplay, 4, 11.0f));
 
     sb_screenplay_destroy(&screenplay);
 }

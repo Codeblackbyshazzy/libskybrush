@@ -455,11 +455,11 @@ void sb_screenplay_set_rth_plan(sb_screenplay_t* screenplay, sb_rth_plan_t* rth_
 }
 
 /**
- * @brief Returns the time in seconds corresponding to a given warped time in the
+ * @brief Returns the time in milliseconds corresponding to a given warped time in the
  * first scene with the specified tag.
  *
  * This function searches for the scene with the specified tag in the screenplay
- * and returns the wall clock time (in seconds) that corresponds to the given warped
+ * and returns the wall clock time (in milliseconds) that corresponds to the given warped
  * time in that scene, taking into account the durations (in wall clock time) of all
  * preceding scenes.
  *
@@ -525,4 +525,22 @@ uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
     }
 
     return time_msec;
+}
+
+/**
+ * @brief Returns the time in seconds corresponding to a given warped time in the
+ * first scene with the specified tag.
+ *
+ * See \ref sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene() for
+ * details.
+ */
+float sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(
+    sb_screenplay_t* screenplay, sb_screenplay_scene_tag_t tag, float warped_time)
+{
+    uint32_t time_msec = sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(screenplay, tag, warped_time);
+    if (time_msec == UINT32_MAX) {
+        return INFINITY;
+    } else {
+        return time_msec / 1000.0f;
+    }
 }
