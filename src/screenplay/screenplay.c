@@ -481,11 +481,13 @@ uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
     sb_screenplay_t* screenplay, sb_screenplay_scene_tag_t tag, float warped_time)
 {
     uint32_t time_msec = 0;
-    uint32_t duration;
+    uint32_t scene_duration;
 
     for (size_t i = 0; i < screenplay->num_scenes; i++) {
         sb_screenplay_scene_t* scene = screenplay->scenes[i];
         int32_t time_rel_msec;
+
+        scene_duration = sb_screenplay_scene_get_duration_msec(scene);
 
         if (scene->tag == tag) {
             sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(scene);
@@ -495,9 +497,8 @@ uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
                 return UINT32_MAX;
             }
 
-            duration = sb_screenplay_scene_get_duration_msec(scene);
-            if (duration <= INT32_MAX) {
-                if (time_rel_msec > (int32_t)duration) {
+            if (scene_duration <= INT32_MAX) {
+                if (time_rel_msec > (int32_t)scene_duration) {
                     /* We are already past the scene with the given tag at the given warped time */
                     return UINT32_MAX;
                 }
@@ -516,15 +517,14 @@ uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
             return UINT32_MAX;
         }
 
-        duration = sb_screenplay_scene_get_duration_msec(scene);
-        time_msec += duration;
-        if (time_msec < duration) {
+        time_msec += scene_duration;
+        if (time_msec < scene_duration) {
             /* Overflow */
             return UINT32_MAX;
         }
     }
 
-    return time_msec;
+    return UINT32_MAX; /* No scene with the given tag */
 }
 
 /**
