@@ -495,7 +495,7 @@ uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
                 return UINT32_MAX;
             }
 
-            duration = sb_time_axis_get_total_duration_msec(time_axis);
+            duration = sb_screenplay_scene_get_duration_msec(scene);
             if (duration <= INT32_MAX) {
                 if (time_rel_msec > (int32_t)duration) {
                     /* We are already past the scene with the given tag at the given warped time */
