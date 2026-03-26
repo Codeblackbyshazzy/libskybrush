@@ -281,7 +281,7 @@ void test_screenplay_scene_set_duration_sec_too_large_is_invalid_and_preserves_o
     TEST_ASSERT_EQUAL_UINT32(4000u, sb_screenplay_scene_get_duration_msec(&scene));
 
     /* Choose a duration that will result in duration_msec_f > UINT32_MAX */
-    float too_large_sec = (UINT32_MAX / 1000.0f) + 1000.0f; /* safely above the threshold */
+    float too_large_sec = (UINT32_MAX / 1000) + 1000.0f; /* safely above the threshold */
 
     err = sb_screenplay_scene_set_duration_sec(&scene, too_large_sec);
     TEST_ASSERT_EQUAL(SB_EINVAL, err);

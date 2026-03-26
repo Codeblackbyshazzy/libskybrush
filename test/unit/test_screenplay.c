@@ -472,7 +472,7 @@ void test_sb_screenplay_contains_scene(void)
 {
     sb_screenplay_t screenplay;
     sb_screenplay_scene_t* scene_ptr = NULL;
-    sb_screenplay_scene_t external_scene;
+    sb_screenplay_scene_t external_scene = { 0 };
 
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_init(&screenplay));
 

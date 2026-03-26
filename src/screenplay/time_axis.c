@@ -332,7 +332,7 @@ void sb_time_axis_set_origin_msec(sb_time_axis_t* axis, int32_t origin_msec)
  */
 sb_error_t sb_time_axis_set_origin_sec(sb_time_axis_t* axis, float origin_sec)
 {
-    if (!isfinite(origin_sec) || origin_sec < 0 || origin_sec > INT32_MAX / 1000.0f) {
+    if (!isfinite(origin_sec) || origin_sec < 0 || origin_sec > INT32_MAX / 1000) {
         return SB_EINVAL;
     }
 
