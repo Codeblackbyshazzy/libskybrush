@@ -254,18 +254,6 @@ sb_error_t sb_screenplay_append_new_scene(sb_screenplay_t* screenplay, sb_screen
 }
 
 /**
- * @brief Clears the contents of a scene, releasing all associated resources.
- *
- * The time axis of the scene will be left intact.
- *
- * @param scene  the scene to clear
- */
-void sb_screenplay_scene_clear_contents(sb_screenplay_scene_t* scene)
-{
-    sb_screenplay_scene_update_contents_from(scene, NULL);
-}
-
-/**
  * @brief Removes the last scene from the screenplay.
  *
  * @param screenplay  the screenplay to remove the scene from
@@ -283,75 +271,6 @@ sb_error_t sb_screenplay_remove_last_scene(sb_screenplay_t* screenplay)
     screenplay->scenes[screenplay->num_scenes] = 0;
 
     return SB_SUCCESS;
-}
-
-/**
- * @brief Updates the \em contents of a scene from another scene.
- *
- * This function copies all contents from the source scene to the destination scene,
- * except the reference counts and the fields related to the duration or the time axis.
- *
- * @param scene  the destination scene to update
- * @param src    the source scene to copy from. May be \c NULL to indicate an empty
- *        scene with no contents.
- */
-void sb_screenplay_scene_update_contents_from(
-    sb_screenplay_scene_t* scene, sb_screenplay_scene_t* src)
-{
-    if (src) {
-        sb_screenplay_scene_set_trajectory(scene, sb_screenplay_scene_get_trajectory(src));
-        sb_screenplay_scene_set_light_program(scene, sb_screenplay_scene_get_light_program(src));
-        sb_screenplay_scene_set_yaw_control(scene, sb_screenplay_scene_get_yaw_control(src));
-        sb_screenplay_scene_set_events(scene, sb_screenplay_scene_get_events(src));
-    } else {
-        sb_screenplay_scene_set_trajectory(scene, NULL);
-        sb_screenplay_scene_set_light_program(scene, NULL);
-        sb_screenplay_scene_set_yaw_control(scene, NULL);
-        sb_screenplay_scene_set_events(scene, NULL);
-    }
-}
-
-/**
- * @brief Returns the number of seconds remaining from the trajectory at the end of the
- * \em time axis of the scene, in warped time.
- *
- * The function returns \em warped time so it takes into account the different rates
- * of the time axis segmnts as well as the time axis origin.
- *
- * Returns zero if no trajectory is associated to the scene. Also returns zero if the
- * time axis of the scene is already longer than the trajectory.
- *
- * Note that the \em duration of the scene is ignored; we always inspect the end of the
- * time axis.
- *
- * @param scene  the scene to query
- */
-float sb_screenplay_scene_get_warped_time_remaining_from_trajectory_at_end_of_time_axis(
-    sb_screenplay_scene_t* scene)
-{
-    sb_trajectory_t* trajectory = sb_screenplay_scene_get_trajectory(scene);
-    sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(scene);
-
-    if (trajectory && time_axis) {
-        float warped_duration_of_axis = sb_time_axis_get_total_warped_duration_sec(time_axis);
-        if (!isfinite(warped_duration_of_axis)) {
-            /* Time axis has infinite warped duration -> trajectory will definitely be
-             * played to the end
-             */
-            return 0.0f;
-        }
-
-        float result = sb_trajectory_get_total_duration_sec(trajectory) - warped_duration_of_axis;
-        float origin = sb_time_axis_get_origin_sec(time_axis);
-        if (origin < 0) {
-            // scene starts _later_ than 00:00 on the show clock so we need to take into
-            // account that we are not playing the trajectory from the very beginning
-            result += origin;
-        }
-        return result > 0 ? result : 0.0f;
-    } else {
-        return 0.0f;
-    }
 }
 
 /**
