@@ -115,6 +115,33 @@ void test_screenplay_scene_get_and_set_tag(void)
     SB_DECREF_STATIC(&scene);
 }
 
+void test_screenplay_scene_origin_accessors(void)
+{
+    sb_screenplay_scene_t scene;
+    sb_error_t err;
+
+    err = sb_screenplay_scene_init(&scene);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+
+    TEST_ASSERT_EQUAL(0, sb_screenplay_scene_get_origin_msec(&scene));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, sb_screenplay_scene_get_origin_sec(&scene));
+
+    sb_screenplay_scene_set_origin_msec(&scene, 1234);
+    TEST_ASSERT_EQUAL(1234, sb_screenplay_scene_get_origin_msec(&scene));
+    TEST_ASSERT_FLOAT_WITHIN(1e-6, 1.234f, sb_screenplay_scene_get_origin_sec(&scene));
+
+    err = sb_screenplay_scene_set_origin_sec(&scene, 2.5f);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    TEST_ASSERT_EQUAL(2500, sb_screenplay_scene_get_origin_msec(&scene));
+    TEST_ASSERT_FLOAT_WITHIN(1e-6, 2.5f, sb_screenplay_scene_get_origin_sec(&scene));
+
+    err = sb_screenplay_scene_set_origin_sec(&scene, -1.0f);
+    TEST_ASSERT_EQUAL(SB_EINVAL, err);
+    TEST_ASSERT_EQUAL(2500, sb_screenplay_scene_get_origin_msec(&scene));
+
+    SB_DECREF_STATIC(&scene);
+}
+
 void test_screenplay_scene_getters_and_setters(void)
 {
     sb_screenplay_scene_t scene;
@@ -188,6 +215,23 @@ void test_screenplay_scene_getters_and_setters(void)
     SB_DECREF_STATIC(&prog);
     SB_DECREF_STATIC(&yaw);
     SB_DECREF_STATIC(&events);
+}
+
+void test_screenplay_scene_reset_clears_tag(void)
+{
+    sb_screenplay_scene_t scene;
+    sb_error_t err;
+
+    err = sb_screenplay_scene_init(&scene);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+
+    sb_screenplay_scene_set_tag(&scene, 77);
+    TEST_ASSERT_EQUAL(77, sb_screenplay_scene_get_tag(&scene));
+
+    sb_screenplay_scene_reset(&scene);
+    TEST_ASSERT_EQUAL(0, sb_screenplay_scene_get_tag(&scene));
+
+    SB_DECREF_STATIC(&scene);
 }
 
 void test_screenplay_scene_set_duration_sec_finite_rounding(void)
@@ -806,6 +850,8 @@ int main(void)
 
     RUN_TEST(test_screenplay_scene_init_sets_defaults);
     RUN_TEST(test_screenplay_scene_get_and_set_tag);
+    RUN_TEST(test_screenplay_scene_origin_accessors);
+    RUN_TEST(test_screenplay_scene_reset_clears_tag);
     RUN_TEST(test_screenplay_scene_getters_and_setters);
     RUN_TEST(test_screenplay_scene_set_duration_sec_finite_rounding);
     RUN_TEST(test_screenplay_scene_set_duration_sec_infinite);

@@ -17,6 +17,7 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <math.h>
 #include <skybrush/error.h>
 #include <skybrush/refcount.h>
@@ -176,6 +177,40 @@ float sb_screenplay_scene_get_duration_sec(
     } else {
         return scene->duration_msec / 1000.0f;
     }
+}
+
+/**
+ * @brief Returns the origin of the time axis of a scene, in milliseconds.
+ *
+ * This function is a shortcut to \ref sb_time_axis_get_origin_msec() for the time axis
+ * of the scene.
+ *
+ * @param scene  the scene to query
+ * @return the origin of the time axis of the scene, in milliseconds
+ */
+int32_t sb_screenplay_scene_get_origin_msec(const sb_screenplay_scene_t* scene)
+{
+    /* casting away constness is safe here because we are not modifying the scene */
+    sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(
+        (sb_screenplay_scene_t*)scene);
+    return sb_time_axis_get_origin_msec(time_axis);
+}
+
+/**
+ * @brief Returns the origin of the time axis of a scene, in seconds.
+ *
+ * This function is a shortcut to \ref sb_time_axis_get_origin_sec() for the time axis
+ * of the scene.
+ *
+ * @param scene  the scene to query
+ * @return the origin of the time axis of the scene, in seconds
+ */
+float sb_screenplay_scene_get_origin_sec(const sb_screenplay_scene_t* scene)
+{
+    /* casting away constness is safe here because we are not modifying the scene */
+    sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(
+        (sb_screenplay_scene_t*)scene);
+    return sb_time_axis_get_origin_sec(time_axis);
 }
 
 /**
@@ -356,6 +391,39 @@ sb_error_t sb_screenplay_scene_set_duration_sec(
 void sb_screenplay_scene_set_infinite(sb_screenplay_scene_t* scene)
 {
     sb_screenplay_scene_set_duration_msec(scene, UINT32_MAX);
+}
+
+/**
+ * @brief Sets the origin of the time axis of a scene, in milliseconds.
+ *
+ * This function is a shortcut to \ref sb_time_axis_set_origin_msec() for the time axis
+ * of the scene.
+ *
+ * @param scene  the scene to modify
+ * @param origin_msec the origin of the time axis to set, in milliseconds
+ */
+void sb_screenplay_scene_set_origin_msec(sb_screenplay_scene_t* scene, int32_t origin_msec)
+{
+    sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(scene);
+    sb_time_axis_set_origin_msec(time_axis, origin_msec);
+}
+
+/**
+ * @brief Sets the origin of the time axis of a scene, in seconds.
+ *
+ * This function is a shortcut to \ref sb_time_axis_set_origin_sec() for the time axis
+ * of the scene.
+ *
+ * @param scene  the scene to modify
+ * @param origin_sec the origin of the time axis to set, in seconds
+ * @return \c SB_SUCCESS if the origin was set successfully, \c SB_EINVAL if the
+ *         origin is invalid
+ */
+sb_error_t sb_screenplay_scene_set_origin_sec(sb_screenplay_scene_t* scene, float origin_sec)
+{
+    sb_time_axis_t* time_axis = sb_screenplay_scene_get_time_axis(scene);
+    assert(time_axis != NULL);
+    return sb_time_axis_set_origin_sec(time_axis, origin_sec);
 }
 
 /**
