@@ -232,6 +232,75 @@ void test_show_controller_scene_transition_switches_players(void)
     SB_DECREF(prog);
 }
 
+void test_show_controller_output_time_multi_scene(void)
+{
+    sb_screenplay_t screenplay;
+    sb_screenplay_scene_t* scene0 = NULL;
+    sb_screenplay_scene_t* scene1 = NULL;
+    sb_show_controller_t ctrl;
+    sb_control_output_time_t output_time;
+    sb_time_axis_t* axis1;
+    sb_error_t err;
+
+    /* Screenplay will have two scenes:
+     *
+     * Scene 0: duration 5000 ms, no time axis segments (time is linear)
+     * Scene 1: duration 3000 ms, one time axis segment with constant rate 2.0
+     *          (time in scene advances at double speed)
+     */
+
+    err = sb_screenplay_init(&screenplay);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene0));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, &scene1));
+    TEST_ASSERT_NOT_NULL(scene0);
+    TEST_ASSERT_NOT_NULL(scene1);
+
+    sb_screenplay_scene_set_duration_msec(scene0, 5000u);
+    sb_screenplay_scene_set_duration_msec(scene1, 3000u);
+
+    axis1 = sb_screenplay_scene_get_time_axis(scene1);
+    TEST_ASSERT_NOT_NULL(axis1);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis1, sb_time_segment_make_constant_rate(10000, 2.0f)));
+
+    /* Screenplay setup finished */
+
+    err = sb_show_controller_init(&ctrl, &screenplay);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+
+    /* Query timestamp in scene 0 */
+    err = sb_show_controller_update_time_msec(&ctrl, 3000u);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    output_time = sb_show_controller_get_current_output_time(&ctrl);
+    TEST_ASSERT_EQUAL_UINT32(3000u, output_time.time_msec);
+    TEST_ASSERT_EQUAL_UINT32(0u, output_time.scene);
+    TEST_ASSERT_EQUAL_UINT32(3000u, output_time.time_in_scene_msec);
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, output_time.warped_time_in_scene_sec);
+
+    /* Query timestamp at scene boundary. Scenes are closed from the left and open
+     * from the right so this belongs to scene 1 */
+    err = sb_show_controller_update_time_msec(&ctrl, 5000u);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    output_time = sb_show_controller_get_current_output_time(&ctrl);
+    TEST_ASSERT_EQUAL_UINT32(5000u, output_time.time_msec);
+    TEST_ASSERT_EQUAL_UINT32(1u, output_time.scene);
+    TEST_ASSERT_EQUAL_UINT32(0u, output_time.time_in_scene_msec);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, output_time.warped_time_in_scene_sec);
+
+    /* Query timestamp in scene 1 */
+    err = sb_show_controller_update_time_msec(&ctrl, 5500u);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    output_time = sb_show_controller_get_current_output_time(&ctrl);
+    TEST_ASSERT_EQUAL_UINT32(5500u, output_time.time_msec);
+    TEST_ASSERT_EQUAL_UINT32(1u, output_time.scene);
+    TEST_ASSERT_EQUAL_UINT32(500u, output_time.time_in_scene_msec);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, output_time.warped_time_in_scene_sec);
+
+    sb_show_controller_destroy(&ctrl);
+    sb_screenplay_destroy(&screenplay);
+}
+
 void test_show_controller_play_fixture_single_scene(void)
 {
     sb_screenplay_t screenplay;
@@ -832,6 +901,7 @@ int main(void)
     RUN_TEST(test_show_controller_update_time_without_screenplay_returns_default);
     RUN_TEST(test_show_controller_update_time_with_empty_screenplay_produces_no_components);
     RUN_TEST(test_show_controller_scene_transition_switches_players);
+    RUN_TEST(test_show_controller_output_time_multi_scene);
     RUN_TEST(test_show_controller_play_fixture_single_scene);
     RUN_TEST(test_show_controller_play_fixture_time_axis_2x);
     RUN_TEST(test_show_controller_forward_left_back_slowdown);
