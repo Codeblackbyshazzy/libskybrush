@@ -514,6 +514,18 @@ void test_time_axis_reverse_map_origin_shift(void)
     TEST_ASSERT_EQUAL_INT32(11500, sb_time_axis_reverse_map(&axis, 3.0f));
 }
 
+void test_time_axis_reverse_map_frozen_segment_infinite(void)
+{
+    sb_time_segment_t moving = sb_time_segment_make_constant_rate(5000, 1.0f);
+    sb_time_segment_t frozen = sb_time_segment_make(UINT32_MAX, 0.0f, 0.0f);
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, moving));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(&axis, frozen));
+
+    TEST_ASSERT_EQUAL_INT32(INT32_MAX, sb_time_axis_reverse_map(&axis, 6.0f));
+    TEST_ASSERT_EQUAL_INT32(5000, sb_time_axis_reverse_map(&axis, 5.0f));
+}
+
 /* Additional mapping scenario test:
  * Three segments:
  *  - realtime for 5s
@@ -835,6 +847,7 @@ int main(int argc, char* argv[])
     RUN_TEST(test_time_axis_reverse_map_across_segments);
     RUN_TEST(test_time_axis_reverse_map_linear_changing_rate);
     RUN_TEST(test_time_axis_reverse_map_origin_shift);
+    RUN_TEST(test_time_axis_reverse_map_frozen_segment_infinite);
 
     /* origin-shift tests */
     RUN_TEST(test_time_axis_map_origin_shift_constant_segment);

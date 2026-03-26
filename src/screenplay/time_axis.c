@@ -622,7 +622,14 @@ int32_t sb_time_axis_reverse_map(const sb_time_axis_t* axis, float time)
             /* The target time is within this segment */
             if (!isfinite(seg_warped_duration_sec) || seg->initial_rate == seg->final_rate) {
                 /* Constant rate segment or infinite segment */
-                accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->initial_rate;
+                if (seg->initial_rate == 0.0f) {
+                    /* Time is frozen in this segment. If we have exactly zero remaining
+                     * warped time, then return that, otherwise return infinity (since
+                     * the time is frozed) */
+                    accumulated_wall_clock_time_sec += (remaining_warped_time_sec > 0.0f) ? INFINITY : 0.0f;
+                } else {
+                    accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->initial_rate;
+                }
             } else if (seg_warped_duration_sec > 0) {
                 /* Linearly changing rate segment */
                 float roots[2];
@@ -665,11 +672,20 @@ int32_t sb_time_axis_reverse_map(const sb_time_axis_t* axis, float time)
     /* Reached last segment. Pretend that time keeps on flowing with the final rate
      * of the last segment.
      */
-    assert(num_segments > 0);
-    seg = sb_time_axis_get_segment(axis, num_segments - 1);
-    accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->final_rate;
+    if (remaining_warped_time_sec > 0.0f) {
+        assert(num_segments > 0);
+        seg = sb_time_axis_get_segment(axis, num_segments - 1);
+        if (seg->final_rate == 0.0f) {
+            accumulated_wall_clock_time_sec += INFINITY;
+        } else {
+            accumulated_wall_clock_time_sec += remaining_warped_time_sec / seg->final_rate;
+        }
+    }
 
 exit:
+    if (!isfinite(accumulated_wall_clock_time_sec)) {
+        return accumulated_wall_clock_time_sec < 0 ? INT32_MIN : INT32_MAX;
+    }
     return axis->origin_msec + (int32_t)(accumulated_wall_clock_time_sec * 1000.0f);
 }
 
