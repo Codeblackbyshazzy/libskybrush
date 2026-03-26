@@ -17,7 +17,6 @@
  * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <float.h>
 #include <math.h>
 #include <skybrush/time_axis.h>
 
@@ -188,6 +187,16 @@ void test_time_segment_warped_duration_realtime_cases(void)
 
     observed = sb_time_segment_get_duration_in_wall_clock_time_sec(&s);
     TEST_ASSERT_FLOAT_WITHIN(EPS, 4.0f, observed);
+}
+
+void test_time_segment_warped_duration_infinite_zero_rate(void)
+{
+    /* Special case, result would be NaN with a naive implementation because
+     * it would boil down to infinity divided by zero. */
+    sb_time_segment_t s = sb_time_segment_make(UINT32_MAX, 0.0f, 0.0f);
+    float observed = sb_time_segment_get_duration_in_warped_time_sec(&s);
+
+    TEST_ASSERT_TRUE(isinf(observed));
 }
 
 void test_time_axis_get_total_duration_variants(void)
@@ -803,6 +812,7 @@ int main(int argc, char* argv[])
     RUN_TEST(test_time_segment_warped_duration_constant);
     RUN_TEST(test_time_segment_warped_duration_spinup_and_slowdown);
     RUN_TEST(test_time_segment_warped_duration_realtime_cases);
+    RUN_TEST(test_time_segment_warped_duration_infinite_zero_rate);
     RUN_TEST(test_time_axis_get_total_duration_variants);
     RUN_TEST(test_time_axis_get_total_warped_duration_sec);
 
