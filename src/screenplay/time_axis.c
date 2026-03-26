@@ -158,8 +158,9 @@ float sb_time_segment_get_duration_in_wall_clock_time_sec(const sb_time_segment_
  */
 float sb_time_segment_get_duration_in_warped_time_sec(const sb_time_segment_t* segment)
 {
+    float duration_wall_clock_time_sec = sb_time_segment_get_duration_in_wall_clock_time_sec(segment);
     float avg_rate = (segment->initial_rate + segment->final_rate) / 2.0f;
-    return sb_time_segment_get_duration_in_wall_clock_time_sec(segment) * avg_rate;
+    return isinf(duration_wall_clock_time_sec) ? INFINITY : duration_wall_clock_time_sec * avg_rate;
 }
 
 /* ********************************************************************************** */
