@@ -170,12 +170,10 @@ sb_screenplay_scene_t* sb_screenplay_get_scene_ptr(
  *
  * The time is specified in milliseconds from the start of the screenplay.
  * If no scene is active at the given time, \c NULL is returned.
+ * When multiple scenes contain the given time, the first one in the sequence is returned.
  *
  * @param screenplay  the screenplay to query
- * @param time_msec   pointer to a variable specifying the time in milliseconds from the
- *        start of the screenplay. It will be updated to contain the time offset
- *        within the returned scene. Its value will be zero upon returning when the
- *        returned scene is \c NULL.
+ * @param time_msec   the time in milliseconds from the start of the screenplay.
  * @param scene_index  optional pointer to a variable that will be set to the index of the
  *        returned scene within the screenplay. Can be \c NULL if the index is not needed.
  *        Will be set to -1 if no scene is active at the given time.
@@ -183,22 +181,14 @@ sb_screenplay_scene_t* sb_screenplay_get_scene_ptr(
  *         if no scene is active at that time
  */
 sb_screenplay_scene_t* sb_screenplay_get_scene_ptr_at_time_msec(
-    sb_screenplay_t* screenplay, uint32_t* time_msec, ssize_t* scene_index)
+    sb_screenplay_t* screenplay, uint32_t time_msec, ssize_t* scene_index)
 {
     for (size_t i = 0; i < screenplay->num_scenes; i++) {
-        sb_screenplay_scene_t* scene = screenplay->scenes[i];
-        uint32_t scene_duration_msec = sb_screenplay_scene_get_duration_msec(scene);
+        sb_screenplay_scene_t* scene = sb_screenplay_get_scene_ptr(screenplay, i);
 
-        if (scene_duration_msec == UINT32_MAX) {
-            /* Infinite duration scene -> always active */
-            if (scene_index) {
-                *scene_index = i;
-            }
-            return scene;
-        }
+        assert(scene != NULL);
 
-        if (*time_msec < scene_duration_msec) {
-            /* Current scene found */
+        if (sb_screenplay_scene_contains_time_msec(scene, time_msec)) {
             if (scene_index) {
                 /* We should use SSIZE_MAX here but it is not standard and therefore
                  * it does not exist on some platforms. Use UINT16_MAX as a practical
@@ -209,11 +199,8 @@ sb_screenplay_scene_t* sb_screenplay_get_scene_ptr_at_time_msec(
             }
             return scene;
         }
-
-        *time_msec -= scene_duration_msec;
     }
 
-    *time_msec = 0;
     if (scene_index) {
         *scene_index = -1;
     }

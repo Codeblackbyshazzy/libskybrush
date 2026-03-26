@@ -359,7 +359,7 @@ sb_error_t sb_show_controller_update_time_msec(sb_show_controller_t* ctrl, uint3
     sb_screenplay_scene_t* scene;
     sb_control_output_t* out = &ctrl->output;
     ssize_t scene_index;
-    int32_t time_msec_orig;
+    uint32_t time_in_scene_msec;
     float warped_time_sec;
     float warped_rate;
     float yaw;
@@ -379,8 +379,7 @@ sb_error_t sb_show_controller_update_time_msec(sb_show_controller_t* ctrl, uint3
         return SB_SUCCESS;
     }
 
-    time_msec_orig = time_msec;
-    scene = ctrl->screenplay ? sb_screenplay_get_scene_ptr_at_time_msec(ctrl->screenplay, &time_msec, &scene_index) : NULL;
+    scene = ctrl->screenplay ? sb_screenplay_get_scene_ptr_at_time_msec(ctrl->screenplay, time_msec, &scene_index) : NULL;
     sb_i_show_controller_set_current_scene(ctrl, scene);
 
     /* time_in_scene_msec is now up-to-date */
@@ -390,12 +389,14 @@ sb_error_t sb_show_controller_update_time_msec(sb_show_controller_t* ctrl, uint3
     sb_i_show_controller_invalidate_output(ctrl);
 
     if (scene == NULL) {
-        /* Time is out of bounds */
+        /* Time is out of bounds or falls between scenes */
+        time_in_scene_msec = 0;
         warped_time_sec = 0.0f;
         *out = ctrl->default_output;
         ctrl->reached_end = 1;
     } else {
         /* Update control output from trajectory if available */
+        time_in_scene_msec = time_msec - sb_screenplay_scene_get_origin_msec(scene);
         warped_time_sec = sb_time_axis_map_ex(&scene->time_axis, time_msec, &warped_rate);
 
         sb_control_output_clear(out);
@@ -440,9 +441,9 @@ sb_error_t sb_show_controller_update_time_msec(sb_show_controller_t* ctrl, uint3
     }
 
     /* Output calculated successfully; we can now update the timestamp */
-    ctrl->output_time.time_msec = time_msec_orig;
+    ctrl->output_time.time_msec = time_msec;
     ctrl->output_time.scene = scene_index;
-    ctrl->output_time.time_in_scene_msec = time_msec;
+    ctrl->output_time.time_in_scene_msec = time_in_scene_msec;
     ctrl->output_time.warped_time_in_scene_sec = warped_time_sec;
 
     return SB_SUCCESS;

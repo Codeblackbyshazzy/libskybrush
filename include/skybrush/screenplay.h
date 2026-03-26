@@ -99,6 +99,8 @@ typedef struct sb_screenplay_scene_s {
 sb_screenplay_scene_t* sb_screenplay_scene_new(void);
 sb_error_t sb_screenplay_scene_init(sb_screenplay_scene_t* scene);
 
+sb_bool_t sb_screenplay_scene_contains_time_msec(
+    const sb_screenplay_scene_t* scene, uint32_t time_msec);
 uint32_t sb_screenplay_scene_get_duration_msec(
     const sb_screenplay_scene_t* scene);
 float sb_screenplay_scene_get_duration_sec(
@@ -157,6 +159,11 @@ sb_error_t sb_screenplay_scene_update_from_binary_file_in_memory(
  * and an event track. Furthermore, each scene has its own time axis that defines
  * how time flows during the scene in relation to wall clock time.
  *
+ * Scenes can be placed at arbitrary positions on the timeline, and they can even
+ * overlap. When querying the screenplay for the scene at a given time instant, the
+ * first scene in the sequence whose time window contains the given time instant will
+ * be returned.
+ *
  * A screenplay can be evaluated by a show controller (\ref sb_show_controller_t)
  * to obtain the control outputs at any given point in time.
  *
@@ -186,7 +193,7 @@ sb_rth_plan_t* sb_screenplay_get_rth_plan(sb_screenplay_t* screenplay);
 sb_screenplay_scene_t* sb_screenplay_get_scene_ptr(
     sb_screenplay_t* screenplay, size_t index);
 sb_screenplay_scene_t* sb_screenplay_get_scene_ptr_at_time_msec(
-    sb_screenplay_t* screenplay, uint32_t* time_msec, ssize_t* scene_index);
+    sb_screenplay_t* screenplay, uint32_t time_msec, ssize_t* scene_index);
 uint32_t sb_screenplay_get_time_msec_for_scene_tag_and_warped_time_in_scene(
     sb_screenplay_t* screenplay, sb_screenplay_scene_tag_t tag, float warped_time);
 float sb_screenplay_get_time_sec_for_scene_tag_and_warped_time_in_scene(

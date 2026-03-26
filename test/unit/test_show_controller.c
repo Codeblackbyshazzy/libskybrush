@@ -21,11 +21,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "utils.h"
 #include <skybrush/control.h>
 #include <skybrush/lights.h>
 #include <skybrush/screenplay.h>
 #include <skybrush/trajectory.h>
+
+#include "utils.h"
 
 void setUp(void)
 {
@@ -176,6 +177,7 @@ void test_show_controller_scene_transition_switches_players(void)
     sb_screenplay_scene_set_trajectory(ch0, traj_empty);
     /* finite duration 1000 ms for first scene */
     sb_screenplay_scene_set_duration_msec(ch0, 1000u);
+    sb_screenplay_scene_set_origin_msec(ch1, 1000u);
 
     /* For scene 1 load real trajectory and light program from fixture */
     fp = fopen("fixtures/test.skyb", "rb");
@@ -242,7 +244,7 @@ void test_show_controller_output_time_multi_scene(void)
     sb_time_axis_t* axis1;
     sb_error_t err;
 
-    /* Screenplay will have two scenes:
+    /* Screenplay will have two non-overlapping scenes:
      *
      * Scene 0: duration 5000 ms, no time axis segments (time is linear)
      * Scene 1: duration 3000 ms, one time axis segment with constant rate 2.0
@@ -258,6 +260,7 @@ void test_show_controller_output_time_multi_scene(void)
     TEST_ASSERT_NOT_NULL(scene1);
 
     sb_screenplay_scene_set_duration_msec(scene0, 5000u);
+    sb_screenplay_scene_set_origin_msec(scene1, 5000u);
     sb_screenplay_scene_set_duration_msec(scene1, 3000u);
 
     axis1 = sb_screenplay_scene_get_time_axis(scene1);
@@ -706,6 +709,7 @@ void test_show_controller_current_scene_dropped_on_scene_removal(void)
 
     /* Make first scene finite to be able to switch to second scene */
     sb_screenplay_scene_set_duration_msec(scene0, 1000u);
+    sb_screenplay_scene_set_origin_msec(scene1, 1000u);
 
     /* Initialize controller with the screenplay */
     err = sb_show_controller_init(&ctrl, &screenplay);
@@ -751,6 +755,7 @@ void test_show_controller_get_current_scene(void)
 
     /* Give each scene a finite duration of 1000 ms so the screenplay spans 0..2000 ms */
     sb_screenplay_scene_set_duration_msec(scene0, 1000u);
+    sb_screenplay_scene_set_origin_msec(scene1, 1000u);
     sb_screenplay_scene_set_duration_msec(scene1, 1000u);
 
     /* Check reference counts of scenes. They should have one owner, the screenplay

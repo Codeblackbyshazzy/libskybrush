@@ -100,15 +100,13 @@ void test_sb_screenplay_get_scene_ptr_at_time_msec_empty(void)
     TEST_ASSERT_EQUAL(SB_SUCCESS, err);
 
     /* Empty screenplay -> must return NULL and set time_msec to 0 */
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, NULL);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, NULL);
     TEST_ASSERT_NULL(ptr);
-    TEST_ASSERT_EQUAL_UINT32(0u, time_msec);
 
     /* Test again with scene index */
     scene_index = 42;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_NULL(ptr);
-    TEST_ASSERT_EQUAL_UINT32(0u, time_msec);
     TEST_ASSERT_EQUAL(-1, scene_index);
 
     sb_screenplay_destroy(&screenplay);
@@ -127,17 +125,15 @@ void test_sb_screenplay_get_scene_ptr_at_time_msec_infinite_first(void)
     TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_append_new_scene(&screenplay, NULL));
 
     /* Call with arbitrary time -> must return first scene and leave time unchanged */
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, NULL);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, NULL);
     TEST_ASSERT_NOT_NULL(ptr);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 0), ptr);
-    TEST_ASSERT_EQUAL_UINT32(5000u, time_msec);
 
     /* Test again with scene index */
     scene_index = 42;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_NOT_NULL(ptr);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 0), ptr);
-    TEST_ASSERT_EQUAL_UINT32(5000u, time_msec);
     TEST_ASSERT_EQUAL(0, scene_index);
 
     sb_screenplay_destroy(&screenplay);
@@ -162,37 +158,32 @@ void test_sb_screenplay_get_scene_ptr_at_time_msec_finite_offsets_and_overflow(v
 
     /* time within first scene */
     time_msec = 500u;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 0), ptr);
-    TEST_ASSERT_EQUAL_UINT32(500u, time_msec);
     TEST_ASSERT_EQUAL(0, scene_index);
 
     /* time exactly at end of first scene and start of second */
     time_msec = 1000u;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 1), ptr);
-    TEST_ASSERT_EQUAL_UINT32(0u, time_msec);
     TEST_ASSERT_EQUAL(1, scene_index);
 
     /* time within second scene (1500 -> second scene offset 500) */
     time_msec = 1500u;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 1), ptr);
-    TEST_ASSERT_EQUAL_UINT32(500u, time_msec);
     TEST_ASSERT_EQUAL(1, scene_index);
 
     /* time exactly at end of all scenes -> must return NULL and set time to 0 */
     time_msec = 6000u; /* 1000 + 2000 + 3000 */
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_NULL(ptr);
-    TEST_ASSERT_EQUAL_UINT32(0u, time_msec);
     TEST_ASSERT_EQUAL(-1, scene_index);
 
     /* time beyond total duration -> NULL and time 0 */
     time_msec = 7000u;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_NULL(ptr);
-    TEST_ASSERT_EQUAL_UINT32(0u, time_msec);
     TEST_ASSERT_EQUAL(-1, scene_index);
 
     sb_screenplay_destroy(&screenplay);
@@ -217,9 +208,8 @@ void test_sb_screenplay_get_scene_ptr_at_time_msec_with_infinite_later_scene(voi
 
     /* time that falls into the infinite third scene: 1000+2000+500 -> should return third with offset 500 */
     time_msec = 3500u;
-    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, &time_msec, &scene_index);
+    ptr = sb_screenplay_get_scene_ptr_at_time_msec(&screenplay, time_msec, &scene_index);
     TEST_ASSERT_EQUAL_PTR(sb_screenplay_get_scene_ptr(&screenplay, 2), ptr);
-    TEST_ASSERT_EQUAL_UINT32(500u, time_msec);
     TEST_ASSERT_EQUAL(2, scene_index);
 
     sb_screenplay_destroy(&screenplay);

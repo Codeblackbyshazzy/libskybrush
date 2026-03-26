@@ -97,6 +97,48 @@ void sb_screenplay_scene_clear_contents(sb_screenplay_scene_t* scene)
 }
 
 /**
+ * @brief Returns whether the given time in milliseconds is contained within the
+ * time window of the scene.
+ *
+ * Scenes are closed from the left and open from the right, i.e. a time is considered
+ * to be contained in the scene if it is greater than or equal to the origin of the
+ * time axis of the scene, and strictly less than the origin plus the duration of the
+ * scene.
+ *
+ * @param scene       the scene to query
+ * @param time_msec   the time in milliseconds to check
+ */
+sb_bool_t sb_screenplay_scene_contains_time_msec(
+    const sb_screenplay_scene_t* scene, uint32_t time_msec)
+{
+    int32_t origin_msec = sb_screenplay_scene_get_origin_msec(scene);
+    if (time_msec < origin_msec) {
+        return 0;
+    }
+
+    uint32_t duration_msec = sb_screenplay_scene_get_duration_msec(scene);
+    if (duration_msec == UINT32_MAX) {
+        /* Infinite duration -> any time after origin is contained */
+        return 1;
+    }
+
+    /* We want to check whether time_msec < origin_msec + duration_msec.
+     * However, origin_msec is signed so the addition may overflow because we are
+     * restricted to the \c int32_t range.
+     *
+     * We rearrange the equation as follows:
+     *
+     * 0 < (origin_msec - time_msec) + duration_msec
+     * 0 > (time_msec - origin_msec) - duration_msec
+     * duration_msec > time_msec - origin_msec
+     *
+     * Since time_msec >= origin_msec, performing the subtraction is now safe and
+     * cannot underflow.
+     */
+    return duration_msec > time_msec - origin_msec;
+}
+
+/**
  * @brief Returns a pointer to the time axis of the given screenplay scene.
  *
  * @param scene  the screenplay scene to query
