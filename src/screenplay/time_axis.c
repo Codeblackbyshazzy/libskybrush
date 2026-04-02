@@ -25,6 +25,7 @@
 #include <skybrush/utils.h>
 #include <string.h>
 
+static sb_time_segment_t sb_i_time_segment_make_invalid(void);
 static sb_error_t sb_i_time_segment_validate(const sb_time_segment_t* seg);
 static sb_error_t sb_i_time_axis_grow_if_needed(sb_time_axis_t* axis);
 
@@ -107,6 +108,45 @@ sb_time_segment_t sb_time_segment_make_slowdown_from_realtime(uint32_t duration_
 }
 
 /**
+ * @brief Creates a new time segment with a specific \em warped duration, initial rate
+ * and final rate.
+ *
+ * The wall-clock duration will be calculated accordingly, rounding \em upwards to the
+ * next millisecond if needed.
+ *
+ * The wall-clock duration will be zero if the warped duration is zero, even if the
+ * rates are non-zero. This allows one to create instantaneous segments.
+ *
+ * The wall-clock duration will be infinite if the warped duration is infinite, or if
+ * the average rate is zero and the warped duration is non-zero.
+ *
+ * Returns an invalid segment if any of the parameters is negative.
+ */
+sb_time_segment_t sb_time_segment_make_warped(float warped_duration_sec, float initial_rate, float final_rate)
+{
+    float avg_rate;
+
+    if (warped_duration_sec < 0.0f || initial_rate < 0.0f || final_rate < 0.0f || isnan(warped_duration_sec) || !isfinite(initial_rate) || !isfinite(final_rate)) {
+        return sb_i_time_segment_make_invalid();
+    }
+
+    if (warped_duration_sec == 0.0f) {
+        /* Zero warped duration -> zero wall clock duration regardless of rates */
+        return sb_time_segment_make(0, initial_rate, final_rate);
+    }
+
+    avg_rate = (initial_rate + final_rate) / 2.0f;
+    if (avg_rate == 0.0f) {
+        /* Segment has zero average rate -> infinite wall clock duration */
+        return sb_time_segment_make(UINT32_MAX, initial_rate, final_rate);
+    }
+
+    return sb_time_segment_make(
+        (uint32_t)ceilf(warped_duration_sec / avg_rate * 1000.0f),
+        initial_rate, final_rate);
+}
+
+/**
  * @brief Creates a new time segment with a specific duration starting from a standstill,
  * speeding up to real-time.
  */
@@ -164,6 +204,11 @@ float sb_time_segment_get_duration_in_warped_time_sec(const sb_time_segment_t* s
 }
 
 /* ********************************************************************************** */
+
+static sb_time_segment_t sb_i_time_segment_make_invalid(void)
+{
+    return sb_time_segment_make(0, NAN, NAN);
+}
 
 static sb_error_t sb_i_time_segment_validate(const sb_time_segment_t* seg)
 {

@@ -84,6 +84,7 @@ sb_time_segment_t sb_time_segment_make_slowdown_from(uint32_t duration_msec, flo
 sb_time_segment_t sb_time_segment_make_slowdown_from_realtime(uint32_t duration_msec);
 sb_time_segment_t sb_time_segment_make_spinup_to(uint32_t duration_msec, float final_rate);
 sb_time_segment_t sb_time_segment_make_spinup_to_realtime(uint32_t duration_msec);
+sb_time_segment_t sb_time_segment_make_warped(float warped_duration_sec, float initial_rate, float final_rate);
 
 uint32_t sb_time_segment_get_duration_in_wall_clock_time_msec(const sb_time_segment_t* segment);
 float sb_time_segment_get_duration_in_wall_clock_time_sec(const sb_time_segment_t* segment);

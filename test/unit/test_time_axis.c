@@ -131,6 +131,40 @@ void test_get_segment_out_of_bounds_returns_null(void)
     TEST_ASSERT_NULL(sb_time_axis_get_segment(&axis, 100));
 }
 
+void test_time_segment_make_warped(void)
+{
+    sb_time_segment_t s;
+
+    s = sb_time_segment_make_warped(5.0f, 2.0f, 2.0f);
+    TEST_ASSERT_EQUAL_UINT32(2500u, s.duration_msec);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 2.0f, s.initial_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 2.0f, s.final_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 5.0f, sb_time_segment_get_duration_in_warped_time_sec(&s));
+
+    s = sb_time_segment_make_warped(1.0f, 0.0f, 0.0f);
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, s.duration_msec);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.initial_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.final_rate);
+
+    s = sb_time_segment_make_warped(5.0f, 1.0f, 0.0f);
+    TEST_ASSERT_EQUAL_UINT32(10000u, s.duration_msec);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 1.0f, s.initial_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.final_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 5.0f, sb_time_segment_get_duration_in_warped_time_sec(&s));
+
+    s = sb_time_segment_make_warped(0.0f, 1.0f, 0.0f);
+    TEST_ASSERT_EQUAL_UINT32(0, s.duration_msec);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 1.0f, s.initial_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.final_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, sb_time_segment_get_duration_in_warped_time_sec(&s));
+
+    s = sb_time_segment_make_warped(2.0f, 0.0f, 0.0f);
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, s.duration_msec);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.initial_rate);
+    TEST_ASSERT_FLOAT_WITHIN(EPS, 0.0f, s.final_rate);
+    TEST_ASSERT_EQUAL_FLOAT(INFINITY, sb_time_segment_get_duration_in_warped_time_sec(&s));
+}
+
 /* Tests for sb_time_segment_get_duration_sec_in_warped_time() */
 
 void test_time_segment_warped_duration_constant(void)
@@ -821,6 +855,7 @@ int main(int argc, char* argv[])
     RUN_TEST(test_get_segment_out_of_bounds_returns_null);
 
     /* warped-duration tests */
+    RUN_TEST(test_time_segment_make_warped);
     RUN_TEST(test_time_segment_warped_duration_constant);
     RUN_TEST(test_time_segment_warped_duration_spinup_and_slowdown);
     RUN_TEST(test_time_segment_warped_duration_realtime_cases);
