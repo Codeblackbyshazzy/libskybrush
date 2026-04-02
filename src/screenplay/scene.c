@@ -659,3 +659,52 @@ exit:
 
     return retval;
 }
+
+/**
+ * @brief Returns the duration in milliseconds that is still left uncovered from the
+ * trajectory at the end of the time axis of the scene.
+ *
+ * Returns zero if no trajectory is associated to the scene.
+ *
+ * @param scene  the scene to query
+ * @param time_msec   pointer to a variable where the result will be stored. The value
+ *        will be set to zero if no trajectory is associated to the scene.
+ * @return \c SB_SUCCESS if the duration was calculated successfully, \c SB_EINVAL if
+ *         the duration could not be calculated because of an invalid time axis
+ */
+sb_error_t sb_screenplay_scene_get_uncovered_trajectory_duration_sec(sb_screenplay_scene_t* scene, float* duration_sec)
+{
+    sb_trajectory_t* trajectory;
+    sb_time_axis_t* time_axis;
+    float result;
+
+    time_axis = sb_screenplay_scene_get_time_axis(scene);
+    assert(time_axis != NULL);
+
+    // Find out the total duration of all segments added to the time axis so far
+    float warped_time_sec = sb_time_axis_get_total_warped_duration_sec(time_axis);
+    if (!isfinite(warped_time_sec)) {
+        if (isnan(warped_time_sec) || warped_time_sec < 0) {
+            // negative infinity or NaN, should not happen
+            return SB_EINVAL; /* LCOV_EXCL_LINE */
+        }
+
+        // positive infinity
+        result = 0;
+    } else {
+        // Calculate how much time there is left from the trajectory
+        // at this moment on the show clock
+        trajectory = sb_screenplay_scene_get_trajectory(scene);
+        if (!trajectory) {
+            result = 0;
+        } else {
+            result = sb_trajectory_get_total_duration_sec(trajectory) - warped_time_sec;
+        }
+    }
+
+    if (duration_sec) {
+        *duration_sec = result;
+    }
+
+    return SB_SUCCESS;
+}

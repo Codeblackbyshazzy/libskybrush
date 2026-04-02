@@ -844,6 +844,56 @@ void test_screenplay_scene_get_warped_time_remaining_at_end_infinite_segment(voi
     SB_DECREF_STATIC(&traj);
 }
 
+void test_screenplay_scene_get_uncovered_trajectory_duration(void)
+{
+    sb_screenplay_scene_t scene;
+    sb_trajectory_t traj;
+    sb_time_axis_t* axis;
+    float uncovered;
+    sb_error_t err;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_init(&scene));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_init(&traj));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_i_build_hold_trajectory(&traj, 10000u));
+
+    sb_screenplay_scene_set_trajectory(&scene, &traj);
+
+    axis = sb_screenplay_scene_get_time_axis(&scene);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis, sb_time_segment_make_realtime(4000u)));
+
+    err = sb_screenplay_scene_get_uncovered_trajectory_duration_sec(&scene, &uncovered);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    TEST_ASSERT_FLOAT_WITHIN(1e-6, 6.0f, uncovered);
+
+    SB_DECREF_STATIC(&scene);
+    SB_DECREF_STATIC(&traj);
+}
+
+void test_screenplay_scene_get_uncovered_trajectory_duration_infinite_segment(void)
+{
+    sb_screenplay_scene_t scene;
+    sb_trajectory_t traj;
+    sb_time_axis_t* axis;
+    float uncovered;
+    sb_error_t err;
+
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_screenplay_scene_init(&scene));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_trajectory_init(&traj));
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_i_build_hold_trajectory(&traj, 10000u));
+
+    sb_screenplay_scene_set_trajectory(&scene, &traj);
+
+    axis = sb_screenplay_scene_get_time_axis(&scene);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_time_axis_append_segment(axis, sb_time_segment_make_realtime(UINT32_MAX)));
+
+    err = sb_screenplay_scene_get_uncovered_trajectory_duration_sec(&scene, &uncovered);
+    TEST_ASSERT_EQUAL(SB_SUCCESS, err);
+    TEST_ASSERT_EQUAL(0.0f, uncovered);
+
+    SB_DECREF_STATIC(&scene);
+    SB_DECREF_STATIC(&traj);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -871,6 +921,8 @@ int main(void)
     RUN_TEST(test_screenplay_scene_get_warped_time_remaining_complex_axis_positive_origin);
     RUN_TEST(test_screenplay_scene_get_warped_time_remaining_at_end_no_trajectory);
     RUN_TEST(test_screenplay_scene_get_warped_time_remaining_at_end_infinite_segment);
+    RUN_TEST(test_screenplay_scene_get_uncovered_trajectory_duration);
+    RUN_TEST(test_screenplay_scene_get_uncovered_trajectory_duration_infinite_segment);
 
     return UNITY_END();
 }

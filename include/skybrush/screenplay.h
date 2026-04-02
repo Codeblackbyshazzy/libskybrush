@@ -143,6 +143,7 @@ void sb_screenplay_scene_set_tag(
     sb_screenplay_scene_t* scene, sb_screenplay_scene_tag_t tag);
 
 void sb_screenplay_scene_clear_contents(sb_screenplay_scene_t* scene);
+sb_error_t sb_screenplay_scene_get_uncovered_trajectory_duration_sec(sb_screenplay_scene_t* scene, float* duration_sec);
 void sb_screenplay_scene_reset(sb_screenplay_scene_t* scene);
 void sb_screenplay_scene_update_contents_from(
     sb_screenplay_scene_t* scene, sb_screenplay_scene_t* src);
