@@ -147,7 +147,7 @@ sb_error_t sb_scale_update_vector2(uint8_t* scale, sb_vector2_t point)
  */
 sb_error_t sb_scale_update_vector3(uint8_t* scale, sb_vector3_t point)
 {
-    return sb_i_scale_update(scale, point.x, point.y, 0.0f);
+    return sb_i_scale_update(scale, point.x, point.y, point.z);
 }
 
 /**

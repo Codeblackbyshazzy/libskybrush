@@ -86,6 +86,33 @@ void test_scale_update_vector3(void)
     TEST_ASSERT_EQUAL(SB_EOVERFLOW, sb_scale_update_vector3(&scale, vec));
 }
 
+void test_scale_update_vector3_axis_regressions(void)
+{
+    uint8_t scale;
+    sb_vector3_t vec;
+
+    scale = 1;
+    vec.x = 0;
+    vec.y = 0;
+    vec.z = 40000;
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_scale_update_vector3(&scale, vec));
+    TEST_ASSERT_EQUAL_UINT8(2, scale);
+
+    scale = 1;
+    vec.x = 40000;
+    vec.y = 0;
+    vec.z = 0;
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_scale_update_vector3(&scale, vec));
+    TEST_ASSERT_EQUAL_UINT8(2, scale);
+
+    scale = 1;
+    vec.x = 0;
+    vec.y = -40000;
+    vec.z = 0;
+    TEST_ASSERT_EQUAL(SB_SUCCESS, sb_scale_update_vector3(&scale, vec));
+    TEST_ASSERT_EQUAL_UINT8(2, scale);
+}
+
 void test_scale_update_vector3_with_yaw(void)
 {
     uint8_t scale = 0;
@@ -271,6 +298,7 @@ int main(int argc, char* argv[])
     UNITY_BEGIN();
 
     RUN_TEST(test_scale_update_vector3);
+    RUN_TEST(test_scale_update_vector3_axis_regressions);
     RUN_TEST(test_scale_update_vector3_with_yaw);
     RUN_TEST(test_solve_quadratic);
     RUN_TEST(test_bezier_cut_at);
