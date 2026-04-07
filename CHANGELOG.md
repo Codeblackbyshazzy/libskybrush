@@ -97,6 +97,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ArduPilot or ChibiOS, or we might be doing something with `realloc()` that is not
   supported.
 
+### Fixed
+
+- Fixed a bug in `sb_scale_update_vector3()` that made the function ignore the Z
+  coordinate.
+
 ## [4.3.0] - 2025-10-15
 
 ### Added
